@@ -1,26 +1,63 @@
+import {LESSONS,METRIC_HELP,explainComparison} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
 let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,phase='ee',timer,positions={};
+let baseline=null,baselineConfig=null,pendingBaseline=true,comparisonFresh=true;
 const colors={a:'#137b88',b:'#6552a0',open:'#259880',cyclic:'#d99629',over:'#cf604e',closed:'#d4dedb'};
 const fmt=(x,n=0)=>Number.isFinite(x)?x.toFixed(n):'--';
 const pct=x=>fmt(x*100)+'%';
 function settings(){return {peep:+$('peep').value,vt:+$('vt').value,rr:+$('rr').value,pressureLimit:45};}
 function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number($('seed-'+k).value)>>>0,pbw:+$('pbw').value}));}
 function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
-function compare(reset=false){labels();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset});}
+function compare(reset=false){comparisonFresh=reset||$('guided-mode').checked;labels();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset:comparisonFresh});}
 function schedule(reset=false){clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
-function metric(label,value,unit='',secondary=false){const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);const l=document.createElement('span');l.textContent=label;e.append(v,l);return e;}
+function metric(label,value,unit='',secondary=false,helpKey=''){
+  const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');
+  const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);
+  const l=document.createElement('span');l.className='metric-label';const name=document.createElement('span');name.textContent=label;l.append(name);
+  if(helpKey){const b=document.createElement('button');b.type='button';b.className='metric-help-button';b.textContent='?';b.setAttribute('aria-label','Explain '+label);b.addEventListener('click',()=>{e.closest('.patient').querySelector('.metric-description').textContent=METRIC_HELP[helpKey];});l.append(b);}
+  e.append(v,l);return e;
+}
 function updateMetrics(k,result){
   const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(
-    metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L'),metric('Plateau pressure',fmt(m.pplat,1),'cmH2O'),
-    metric('Driving pressure',fmt(m.dp,1),'cmH2O'),metric('Crs',fmt(m.crs),'mL/cmH2O'),
-    metric('Aerated tissue at expiration',pct(m.openEE),'',true),metric('Intratidal aeration gain',pct(m.cyclic),'',true),
-    metric('High volume-ratio tissue',pct(m.over),'',true),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true)
+    metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L',false,'eelv'),metric('Plateau airway pressure',fmt(m.pplat,1),'cmH2O',false,'pplat'),
+    metric('Driving pressure',fmt(m.dp,1),'cmH2O',false,'dp'),metric('Respiratory compliance',fmt(m.crs),'mL/cmH2O',false,'crs'),
+    metric('Aerated tissue at expiration',pct(m.openEE),'',true,'openEE'),metric('Distension proxy at inspiration',pct(m.over),'',true,'over')
   );
+  const patient=$('patient-'+k);
+  let pressure=patient.querySelector('.pressure-summary');if(!pressure){pressure=document.createElement('p');pressure.className='pressure-summary';patient.append(pressure);}
+  pressure.textContent=`Mean pleural pressure: ${fmt(m.meanPleuralEE,1)} at expiration → ${fmt(m.meanPleuralEI,1)} cmH2O at inspiration. Mean transpulmonary pressure at inspiration: ${fmt(m.pplat,1)} − ${fmt(m.meanPleuralEI,1)} = ${fmt(m.transpulmonaryEI,1)} cmH2O.`;
+  let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');help.textContent='Select a metric’s ? button for its definition and interpretation.';patient.append(help);}
+  let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';const summary=document.createElement('summary');summary.textContent='Additional model measures';advanced.append(summary);const values=document.createElement('div');values.className='metrics';advanced.append(values);patient.append(advanced);}
+  advanced.querySelector('.metrics').replaceChildren(metric('Intratidal aeration gain',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
   const delivery=$('delivery-'+k);delivery.className='delivery'+(m.limited?' limited':'');
-  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?'45 cmH2O pressure ceiling limited delivery.':`End-inspiratory mean transpulmonary pressure ${fmt(m.transpulmonaryEI,1)} cmH2O.`);
+  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?'45 cmH2O pressure ceiling limited delivery.':'');
   if(m.limited)delivery.setAttribute('role','alert');else delivery.removeAttribute('role');
 }
+function renderTeaching(){
+  const output=$('comparison-explanation');output.replaceChildren();
+  if(!baseline||!lastResults)return;
+  if(JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
+  if(!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
+  lastResults.forEach((r,i)=>{
+    const x=explainComparison(baseline[i].metrics,r.metrics),article=document.createElement('article'),h=document.createElement('h3');h.textContent='Patient '+(i?'B':'A');article.append(h);
+    for(const [key,text] of Object.entries(x)){const p=document.createElement('p');p.className=key;p.textContent=text;article.append(p);}output.append(article);
+  });
+}
+function setLessonBaseline(){
+  const lesson=LESSONS[$('lesson').value];
+  for(const [key,value] of Object.entries(lesson.baseline))$(key).value=value;
+  for(const [i,k] of ['a','b'].entries()){$('kind-'+k).value=lesson.kinds[i];$('seed-'+k).value=13791;}
+  $('guided-mode').checked=true;$('lesson-instruction').textContent=lesson.instruction;$('apply-adjustment').disabled=true;
+  pendingBaseline=true;baseline=null;invalidateSweep();clearTimeout(timer);compare(true);
+}
+$('set-baseline').addEventListener('click',setLessonBaseline);
+$('lesson').addEventListener('change',setLessonBaseline);
+$('apply-adjustment').addEventListener('click',()=>{
+  for(const [key,value] of Object.entries(LESSONS[$('lesson').value].adjustment))$(key).value=value;
+  invalidateSweep();clearTimeout(timer);compare(true);
+});
+$('guided-mode').addEventListener('change',()=>{renderTeaching();});
 function drawMap(k,result){
   const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1;
   canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
@@ -82,7 +119,7 @@ function drawPV(){
 }
 function drawSweep(){
   const svg=$('sweep-chart'),s=baseChart(svg,[4,24],[0,100],'PEEP (cmH2O)','Tissue fraction (%)');
-  if(!lastSweep){svg.append(svgEl('text',{x:(s.left+s.w-s.right)/2,y:120,'text-anchor':'middle'},'A paired PEEP experiment'));return;}
+  if(!lastSweep){svg.append(svgEl('text',{x:(s.left+s.w-s.right)/2,y:120,'text-anchor':'middle'},'No PEEP sweep results'));return;}
   lastSweep.forEach((r,i)=>{
     const c=i?colors.b:colors.a;
     line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c);
@@ -95,7 +132,8 @@ function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,last
 worker.onmessage=({data})=>{
   if(data.type==='compare'){
     if(data.id!==compareId)return;lastResults=data.results;window.ardsResults=lastResults;
-    $('status').textContent=`10 breaths simulated at RR ${settings().rr}/min. Prior recruitment state is retained until patients are reset. Pressure ceiling: 45 cmH2O.`;
+    $('status').textContent=`10 breaths simulated at RR ${settings().rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: 45 cmH2O.`;
+    if(pendingBaseline){baseline=structuredClone(lastResults);baselineConfig=JSON.stringify(config());pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${settings().peep} cmH2O, VT ${settings().vt} mL/kg PBW. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();}else renderTeaching();
     render(); window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
     const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
   }else if(data.type==='sweep'){
@@ -128,7 +166,7 @@ $('share').addEventListener('click',async()=>{
 });
 $('sweep').addEventListener('click',()=>{$('sweep').disabled=true;$('sweep').textContent='Sweeping...';sweepId=++request;worker.postMessage({id:sweepId,type:'sweep',config:config(),settings:settings()});});
 $('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;worker.postMessage({id:++request,type:'benchmark'});});
-$('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS_sim_kh-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+$('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS_Sims-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 const tabs=[...document.querySelectorAll('[role=tab]')];
 function selectTab(tab){for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
 tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectTab(tab));tab.addEventListener('keydown',e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();selectTab(tabs[next]);}});});
@@ -136,4 +174,4 @@ window.addEventListener('resize',()=>{clearTimeout(window.ardsResize);window.ard
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
 for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
-labels();drawSweep();compare(true);
+labels();drawSweep();if(params.size){$('lesson-instruction').textContent=LESSONS.recruitment.instruction;compare(true);}else setLessonBaseline();

@@ -13,4 +13,4 @@ const server=http.createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(bytes);
   }catch{res.writeHead(404);res.end('Not found');}
 });
-server.listen(port,'127.0.0.1',()=>console.log(`ARDS_sim_kh: http://127.0.0.1:${port}`));
+server.listen(port,'127.0.0.1',()=>console.log(`ARDS_Sims: http://127.0.0.1:${port}`));

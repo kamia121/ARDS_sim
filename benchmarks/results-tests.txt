@@ -1,5 +1,5 @@
 
-> ards-sim-kh@0.1.0 test
+> ards-sims@0.1.0 test
 > node --test tests/*.test.mjs
 
 {
@@ -9,7 +9,7 @@
     {
       "name": "Independent analytic linear compartment reference",
       "pass": true,
-      "ms": 1.8055090000000078,
+      "ms": 2.2597829999999988,
       "evidence": {
         "expected": {
           "eelv": 2300,
@@ -39,7 +39,7 @@
     {
       "name": "Volume conservation and regional volume sums at attainable targets",
       "pass": true,
-      "ms": 153.680546,
+      "ms": 167.650509,
       "evidence": [
         {
           "kind": "high",
@@ -62,7 +62,7 @@
     {
       "name": "Pressure ceiling reduces delivered VT, including target beyond capacity",
       "pass": true,
-      "ms": 35.54826799999998,
+      "ms": 41.959903,
       "evidence": {
         "ordinary": {
           "eelv": 779.6620766375742,
@@ -105,7 +105,7 @@
     {
       "name": "Nonlinear constitutive curve is monotone and stiffens at high positive TP",
       "pass": true,
-      "ms": 3.30185400000002,
+      "ms": 4.132303999999976,
       "evidence": {
         "unitsChecked": 512
       }
@@ -113,7 +113,7 @@
     {
       "name": "Persistent state creates recruitment hysteresis and sweep isolates original",
       "pass": true,
-      "ms": 748.7395530000001,
+      "ms": 1039.250408,
       "evidence": {
         "up8": 0.382732776517959,
         "down8": 0.4403533828486915,
@@ -321,7 +321,7 @@
     {
       "name": "Opening/closure pressure thresholds retain a history-dependent state",
       "pass": true,
-      "ms": 0.715989000000036,
+      "ms": 1.6177589999999782,
       "evidence": {
         "lowState": 0.1,
         "highState": 0.9
@@ -330,7 +330,7 @@
     {
       "name": "Seed repeatability and wall phenotype preserves exact lung assumptions",
       "pass": true,
-      "ms": 71.35671400000001,
+      "ms": 87.204025,
       "evidence": {
         "seed": 17,
         "unitCount": 512
@@ -339,7 +339,7 @@
     {
       "name": "Chest-wall offset and elastance have distinct analytic effects",
       "pass": true,
-      "ms": 0.48894700000005287,
+      "ms": 0.49779899999998634,
       "evidence": {
         "base": {
           "eelv": 2300,
@@ -400,7 +400,7 @@
     {
       "name": "Timestep refinement decreases error against the finer result",
       "pass": true,
-      "ms": 399.11647199999993,
+      "ms": 502.09286899999984,
       "evidence": {
         "runs": [
           {
@@ -506,7 +506,7 @@
     {
       "name": "Seed variability and measured high versus low recruitment response",
       "pass": true,
-      "ms": 2720.056557,
+      "ms": 3459.5452240000004,
       "evidence": {
         "baselineAeration": [
           0.39441340295503674,
@@ -547,7 +547,7 @@
     {
       "name": "Numerical regional resolution is quantified, not assumed identical",
       "pass": true,
-      "ms": 146.22672499999953,
+      "ms": 259.28234800000064,
       "evidence": {
         "runs": [
           {
@@ -614,16 +614,19 @@
     {
       "name": "Fractions, serialization, persistent elapsed time and input rejection",
       "pass": true,
-      "ms": 36.919817999999395
+      "ms": 40.16429900000003
     }
   ]
 }
-✔ tests/engine.test.mjs (4409.059082ms)
-ℹ tests 1
+✔ tests/engine.test.mjs (5753.183238ms)
+✔ A compliance improvement does not conceal an increased distension proxy (1.18684ms)
+✔ Reduced delivered volume receives an explicit interpretation caveat (0.291132ms)
+✔ Guided PEEP comparison reports the actual simulated differences (70.823476ms)
+ℹ tests 4
 ℹ suites 0
-ℹ pass 1
+ℹ pass 4
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 4418.359726
+ℹ duration_ms 5767.152458

@@ -1,6 +1,8 @@
-# ARDS_sim_kh
+# ARDS_Sims
 
-A browser teaching lab for heterogeneous regional lung mechanics. Compare seeded patients, recruitment history, chest-wall load, and regional distension under the same ventilator settings. This release is an uncalibrated educational model, not a patient-specific predictor or a PEEP optimizer.
+[Open the simulator](https://kamia121.github.io/ARDS_sim/)
+
+A browser educational simulator for heterogeneous regional lung mechanics. Guided lessons compare a baseline with one ventilator adjustment and explain the model tradeoffs. Compare seeded patients, recruitment history, chest-wall load, and regional distension under the same ventilator settings. This release is an uncalibrated educational model, not a patient-specific predictor or a PEEP optimizer.
 
 ## Run locally (Mac or Windows)
 
@@ -25,6 +27,7 @@ The browser has its own device benchmark and JSON export. The static release is 
 
 ## Read before extending
 
+- [Teaching guide](docs/TEACHING_GUIDE.md)
 - [Model specification](docs/MODEL_SPEC.md)
 - [Engine comparison and decision](docs/ENGINE_DECISION.md)
 - [Recorded benchmarks](docs/BENCHMARK_REPORT.md)

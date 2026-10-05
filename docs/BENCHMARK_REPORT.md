@@ -1,6 +1,6 @@
 # Recorded benchmark report
 
-Recorded 2026-10-05T14:36:36.411Z. Raw samples and environment are in `benchmarks/results-engine.json`, `results-browser.json`, and `results-explain.json`. These are performance and numerical-verification results, not clinical validation.
+Recorded 2026-10-05T18:18:00.392Z. Raw samples and environment are in `benchmarks/results-engine.json`, `results-browser.json`, and `results-explain.json`. These are performance and numerical-verification results, not clinical validation.
 
 ## Runtime
 
@@ -10,13 +10,13 @@ Workload: fresh high-recruitability patient, PBW 70 kg, PEEP 12, VT 6 mL/kg, RR 
 
 | Regions | Node median ms | Node P95 ms | Browser median ms | Browser P95 ms |
 |---|---|---|---|---|
-| 128 | 5.08 | 6.86 | 5.40 | 8.40 |
-| 512 | 21.03 | 25.91 | 20.60 | 24.00 |
-| 2048 | 84.65 | 93.91 | 88.70 | 114.70 |
+| 128 | 5.08 | 6.86 | 7.20 | 7.80 |
+| 512 | 21.03 | 25.91 | 25.00 | 34.00 |
+| 2048 | 84.65 | 93.91 | 96.10 | 169.20 |
 
 Node: five warmups and 21 measured runs, includes patient creation. Browser: one warmup and seven measured runs, patient creation outside the timer, excludes plotting. P95 estimators/sample counts differ; these are separate measurements, not a claim that one runtime is faster. The 2,048-region Node series contains a 666 ms scheduling/GC outlier retained in the raw data.
 
-One-patient standardized 22-step PEEP sweep (ascending then descending, ten breaths/step) Node median 446.20 ms, P95 469.01 ms. The paired UI reset (both 512-region patients, worker plus DOM/canvas updates) median 61.20 ms, P95 68.30 ms over seven runs. UI timings do not isolate compositor presentation and should not be described as frame latency.
+One-patient standardized 22-step PEEP sweep (ascending then descending, ten breaths/step) Node median 446.20 ms, P95 469.01 ms. The paired UI reset (both 512-region patients, worker plus DOM/canvas updates) median 68.60 ms, P95 105.50 ms over seven runs. UI timings do not isolate compositor presentation and should not be described as frame latency.
 
 ## Numerical sensitivity
 
@@ -29,6 +29,8 @@ Across ten seeds at 512 regions, aerated fraction mean 50.844%, sample SD 0.777 
 Twelve engine checks pass: seeded reproducibility, constitutive monotonicity, analytic fixed-open linear mechanics, pressure-ceiling behavior, volume residuals, pressure/volume consistency, hysteresis, phenotype behavior, chest-wall response, sweep isolation, timestep refinement, and invalid-input handling. See the executable test file for exact assertions and scenarios.
 
 Browser checks pass: reproducible reset, phase toggle, fresh isolated 22-step sweep, stale sweep invalidation, phenotype change, 320/390/1280 layout without overflow, module worker and device benchmark, documentation links, no page errors or failed requests. Layout was inspected at 1280, 390 and 320 CSS-pixel widths without horizontal overflow. Mobile emulation tested layout only; no physical phone, Mac mini or Windows PC was benchmarked. Desktop/mobile screenshots are included.
+
+Three additional teaching interpretation checks verify tradeoff language, pressure-limited volume caveats, and arithmetic against actual engine results. `results-teaching-browser.json` records the guided-flow browser checks.
 
 ## Explain integration trial
 

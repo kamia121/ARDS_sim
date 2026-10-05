@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-05T18:18:26.355Z",
+  "checks": [
+    "professional title and name",
+    "same-seed guided baseline",
+    "PEEP adjustment with two patient explanations",
+    "accessible compliance definition",
+    "wall comparison with pleural-pressure explanation",
+    "tidal-volume comparison",
+    "explicit state-retaining history mode",
+    "scenario link settings preserved",
+    "no page errors"
+  ]
+}
