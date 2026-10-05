@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-05T14:36:36.411Z",
+  "browser": "153.0.8010.0",
+  "scope": "Headless Chromium on Linux host; desktop/mobile layout emulation, not a physical mobile benchmark. Paired worker-plus-DOM reset timings include creation, simulation and DOM/canvas updates, but do not isolate compositor presentation.",
+  "checks": [
+    "reproducible reset",
+    "phase toggle",
+    "fresh isolated 22-step sweep",
+    "stale sweep invalidation",
+    "phenotype change",
+    "320/390/1280 layout without overflow",
+    "module worker and device benchmark",
+    "documentation links",
+    "no page errors or failed requests"
+  ],
+  "layout": [
+    {
+      "width": 1280,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "width": 320,
+      "overflow": false
+    }
+  ],
+  "pairedUpdate": {
+    "samplesMs": [
+      67.10000000009313,
+      61.1999999997206,
+      68.29999999981374,
+      53.10000000009313,
+      59.5,
+      63.3000000002794,
+      48.59999999962747
+    ],
+    "medianMs": 61.1999999997206,
+    "p95Ms": 68.29999999981374
+  },
+  "device": {
+    "date": "2026-10-05T14:36:36.317Z",
+    "environment": {
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.0 Safari/537.36",
+      "logicalProcessors": 9
+    },
+    "settings": {
+      "peep": 12,
+      "vt": 6,
+      "rr": 20,
+      "pbw": 70,
+      "pressureLimit": 45
+    },
+    "scope": "Isolated engine throughput in browser worker; excludes plotting and rendering. Warmup and seven fresh-patient runs per size. No CPU throttling.",
+    "rows": [
+      {
+        "units": 128,
+        "breaths": 10,
+        "dt": 0.1,
+        "samplesMs": [
+          5.100000000093132,
+          8.399999999906868,
+          5.399999999906868,
+          4.7999999998137355,
+          5.5,
+          5,
+          5.399999999906868
+        ],
+        "medianMs": 5.399999999906868,
+        "p95Ms": 8.399999999906868,
+        "realTimeFactor": 5555.555555651371
+      },
+      {
+        "units": 512,
+        "breaths": 10,
+        "dt": 0.1,
+        "samplesMs": [
+          18.899999999906868,
+          22.100000000093132,
+          22.09999999962747,
+          20.600000000093132,
+          20.299999999813735,
+          24,
+          20.5
+        ],
+        "medianMs": 20.600000000093132,
+        "p95Ms": 24,
+        "realTimeFactor": 1456.3106796050665
+      },
+      {
+        "units": 2048,
+        "breaths": 10,
+        "dt": 0.1,
+        "samplesMs": [
+          87,
+          96.70000000018626,
+          96.10000000009313,
+          85.1999999997206,
+          87.29999999981374,
+          88.70000000018626,
+          114.6999999997206
+        ],
+        "medianMs": 88.70000000018626,
+        "p95Ms": 114.6999999997206,
+        "realTimeFactor": 338.21871476817364
+      }
+    ]
+  }
+}

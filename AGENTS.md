@@ -1,0 +1,3 @@
+# Project instructions
+
+Preserve this as an explicitly uncalibrated educational model. Do not add patient-treatment recommendations or invented validation claims. Keep equations, parameters, raw benchmark results and UI labels consistent. Treat regional map locations as schematic. Changes to physiology require meaningful verification, an updated model specification, and recorded numerical sensitivity. Run `npm test` and `npm run build`; run browser QA after UI changes. Keep the app portable and avoid production dependencies without a clear need. Never commit credentials or patient data. Review independent Claude findings critically and record accepted changes.

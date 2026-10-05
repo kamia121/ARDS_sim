@@ -1,0 +1,139 @@
+const $=id=>document.getElementById(id);
+const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
+let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,phase='ee',timer,positions={};
+const colors={a:'#137b88',b:'#6552a0',open:'#259880',cyclic:'#d99629',over:'#cf604e',closed:'#d4dedb'};
+const fmt=(x,n=0)=>Number.isFinite(x)?x.toFixed(n):'--';
+const pct=x=>fmt(x*100)+'%';
+function settings(){return {peep:+$('peep').value,vt:+$('vt').value,rr:+$('rr').value,pressureLimit:45};}
+function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number($('seed-'+k).value)>>>0,pbw:+$('pbw').value}));}
+function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
+function compare(reset=false){labels();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset});}
+function schedule(reset=false){clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
+function metric(label,value,unit='',secondary=false){const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);const l=document.createElement('span');l.textContent=label;e.append(v,l);return e;}
+function updateMetrics(k,result){
+  const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(
+    metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L'),metric('Plateau pressure',fmt(m.pplat,1),'cmH2O'),
+    metric('Driving pressure',fmt(m.dp,1),'cmH2O'),metric('Crs',fmt(m.crs),'mL/cmH2O'),
+    metric('Aerated tissue at expiration',pct(m.openEE),'',true),metric('Intratidal aeration gain',pct(m.cyclic),'',true),
+    metric('High volume-ratio tissue',pct(m.over),'',true),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true)
+  );
+  const delivery=$('delivery-'+k);delivery.className='delivery'+(m.limited?' limited':'');
+  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?'45 cmH2O pressure ceiling limited delivery.':`End-inspiratory mean transpulmonary pressure ${fmt(m.transpulmonaryEI,1)} cmH2O.`);
+  if(m.limited)delivery.setAttribute('role','alert');else delivery.removeAttribute('role');
+}
+function drawMap(k,result){
+  const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1;
+  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
+  const cx=width/2,gap=width*.04,rx=Math.min(width*.22,100),ry=height*.46,cy=height/2;
+  for(const side of [-1,1]){ctx.fillStyle='#f1f5f3';ctx.beginPath();ctx.ellipse(cx+side*(rx+gap),cy,rx+8,ry+7,side*-.08,0,2*Math.PI);ctx.fill();}
+  positions[k]=[];
+  result.units.forEach((u,i)=>{
+    const side=i%2?-1:1,dep=u.dep,y=cy+(dep-.5)*2*ry*.95;
+    const envelope=Math.sqrt(Math.max(.06,1-((y-cy)/ry)**2));
+    const jitter=(((Math.imul(i+1,2654435761)>>>0)%10000)/10000-.5)*2;
+    const x=cx+side*(rx+gap)+jitter*rx*.90*envelope;
+    const f=phase==='ee'?u.openEE:u.openEI;
+    const high=phase==='ei'&&u.strainEI>1.65&&f>.2;
+    const cyclic=Math.abs(u.openEI-u.openEE)>.08&&Math.max(u.openEI,u.openEE)>.15;
+    const state=high?'over':cyclic?'cyclic':f>.35?'open':'closed';
+    const radius=Math.max(2.2,Math.min(4.4,width/100))*(.7+.35*Math.sqrt(Math.max(0,f)));
+    ctx.globalAlpha=state==='closed'?.85:.42+.58*f;ctx.fillStyle=colors[state];ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);ctx.fill();
+    if(state==='cyclic'){ctx.globalAlpha=1;ctx.strokeStyle=colors.cyclic;ctx.lineWidth=.7;ctx.stroke();}
+    positions[k].push({x,y,u,state});
+  });ctx.globalAlpha=1;
+  canvas.setAttribute('aria-label',`Patient ${k.toUpperCase()}: ${phase==='ee'?'end expiration':'end inspiration'}. Aerated fraction ${pct(phase==='ee'?result.metrics.openEE:result.metrics.openEI)}, high strain at inspiration ${pct(result.metrics.over)}. Schematic distribution; select a unit for details.`);
+}
+for(const k of ['a','b'])$('map-'+k).addEventListener('click',event=>{
+  const rect=event.currentTarget.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+  const nearest=positions[k]?.reduce((best,p)=>((p.x-x)**2+(p.y-y)**2)<best.distance?{...p,distance:(p.x-x)**2+(p.y-y)**2}:best,{distance:Infinity});
+  if(nearest?.u&&nearest.distance<500){const u=nearest.u;$('unit-'+k).textContent=`Unit ${u.id}: open ${pct(u.openEE)} at expiration / ${pct(u.openEI)} at inspiration. Volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`;}
+});
+const NS='http://www.w3.org/2000/svg';
+function svgEl(tag,attrs={},text){const e=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,String(v)));if(text!=null)e.textContent=text;return e;}
+function baseChart(svg,xDomain,yDomain,xLabel,yLabel){
+  const w=svg.clientWidth||500,h=260,left=58,right=15,top=24,bottom=50;
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.replaceChildren();
+  const x=v=>left+(v-xDomain[0])/(xDomain[1]-xDomain[0])*(w-left-right),y=v=>h-bottom-(v-yDomain[0])/(yDomain[1]-yDomain[0])*(h-top-bottom);
+  for(let i=0;i<=4;i++){
+    const v=yDomain[0]+i*(yDomain[1]-yDomain[0])/4;
+    svg.append(svgEl('line',{x1:left,y1:y(v),x2:w-right,y2:y(v),stroke:'#d6e0dd','stroke-width':.6}));
+    svg.append(svgEl('text',{x:left-8,y:y(v)+4,'text-anchor':'end'},fmt(v,yDomain[1]<=1?1:0)));
+  }
+  for(let i=0;i<=4;i++){
+    const v=xDomain[0]+i*(xDomain[1]-xDomain[0])/4;
+    svg.append(svgEl('text',{x:x(v),y:h-bottom+22,'text-anchor':'middle'},fmt(v,xDomain[1]<=10?1:0)));
+  }
+  svg.append(svgEl('line',{x1:left,y1:h-bottom,x2:w-right,y2:h-bottom,stroke:'#9aacab'}));
+  svg.append(svgEl('text',{x:(left+w-right)/2,y:h-8,'text-anchor':'middle'},xLabel));
+  svg.append(svgEl('text',{x:15,y:top+(h-top-bottom)/2,transform:`rotate(-90 15 ${top+(h-top-bottom)/2})`,'text-anchor':'middle'},yLabel));
+  return {x,y,w,h,left,right,top,bottom};
+}
+function line(svg,points,scales,color,dash='',opacity=1){
+  if(!points.length)return;const d=points.map((p,i)=>`${i?'L':'M'}${scales.x(p.x).toFixed(2)},${scales.y(p.y).toFixed(2)}`).join(' ');
+  svg.append(svgEl('path',{d,fill:'none',stroke:color,'stroke-width':2,'stroke-dasharray':dash,opacity,'stroke-linejoin':'round'}));
+}
+function drawPV(){
+  const svg=$('pv-chart');if(!lastResults)return;
+  const points=lastResults.flatMap(r=>r.pv).filter(p=>Number.isFinite(p.volume)&&Number.isFinite(p.pressure));
+  const xmin=Math.max(0,Math.floor(Math.min(...points.map(p=>p.volume))/250)*.25-.1),xmax=Math.ceil(Math.max(...points.map(p=>p.volume))/250)*.25+.1;
+  const ymax=Math.max(30,Math.ceil(Math.max(...points.map(p=>p.pressure))/5)*5+5);
+  const s=baseChart(svg,[xmin,xmax],[0,ymax],'Total gas volume (L)','Airway pressure (cmH2O)');
+  lastResults.forEach((r,i)=>line(svg,r.pv.map(p=>({x:p.volume/1000,y:p.pressure})),s,i?colors.b:colors.a));
+}
+function drawSweep(){
+  const svg=$('sweep-chart'),s=baseChart(svg,[4,24],[0,100],'PEEP (cmH2O)','Tissue fraction (%)');
+  if(!lastSweep){svg.append(svgEl('text',{x:(s.left+s.w-s.right)/2,y:120,'text-anchor':'middle'},'A paired PEEP experiment'));return;}
+  lastSweep.forEach((r,i)=>{
+    const c=i?colors.b:colors.a;
+    line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c);
+    line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.over*100})),s,c,'6 4');
+    line(svg,r.descending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c,'2 4',.4);
+  });
+  svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending high-strain tissue; faint dotted lines show descending aeration. Patient A teal, Patient B purple.');
+}
+function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i]);});drawPV();}drawSweep();}
+worker.onmessage=({data})=>{
+  if(data.type==='compare'){
+    if(data.id!==compareId)return;lastResults=data.results;window.ardsResults=lastResults;
+    $('status').textContent=`10 breaths simulated at RR ${settings().rr}/min. Prior recruitment state is retained until patients are reset. Pressure ceiling: 45 cmH2O.`;
+    render(); window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
+    const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
+  }else if(data.type==='sweep'){
+    if(data.id!==sweepId)return;lastSweep=data.results;window.ardsSweep=lastSweep;drawSweep();$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';
+    $('sweep-caption').textContent='A teal / B purple. Solid: ascending aerated fraction. Dashed: ascending high-strain fraction. Faint dotted: descending aeration. Fresh seeded patients; 10 breaths per PEEP step; active state preserved.';
+  }else if(data.type==='benchmark-progress'){$('benchmark-status').textContent=data.message;}
+  else if(data.type==='benchmark'){
+    deviceResults=data.results;window.ardsBenchmark=deviceResults;$('benchmark-rows').replaceChildren();
+    for(const r of deviceResults.rows){const row=document.createElement('tr');for(const v of [r.units,fmt(r.medianMs,1)+' ms',fmt(r.p95Ms,1)+' ms',fmt(r.realTimeFactor,1)+'x']){const td=document.createElement('td');td.textContent=v;row.append(td);}$('benchmark-rows').append(row);}
+    $('benchmark-status').textContent=`Completed ${new Date(deviceResults.date).toLocaleString()}. Seven timed runs per size; engine only.`;$('run-benchmark').disabled=false;$('export-benchmark').disabled=false;
+  }else if(data.type==='error'){
+    const target=data.requestType==='benchmark'?'benchmark-status':'status';$(target).textContent='Simulation error: '+data.message;$(target).setAttribute('role','alert');$('sweep').disabled=false;$('run-benchmark').disabled=false;
+  }
+};
+worker.onerror=event=>{$('status').textContent='The simulation could not load: '+event.message;$('status').setAttribute('role','alert');};
+function invalidateSweep(){lastSweep=null;sweepId=0;window.ardsSweep=null;$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';$('sweep-caption').textContent='Run a fresh standardized sweep for these settings.';drawSweep();}
+for(const k of ['peep','vt','rr'])$(k).addEventListener('input',()=>{if(k!=='peep')invalidateSweep();labels();schedule();});
+$('pbw').addEventListener('input',()=>{invalidateSweep();labels();schedule(true);});
+for(const k of ['a','b'])for(const type of ['kind','seed'])$(type+'-'+k).addEventListener('change',()=>{
+  const seed=$('seed-'+k);if(!Number.isFinite(Number(seed.value))||Number(seed.value)<0||Number(seed.value)>4294967295)seed.value=k==='a'?13791:14602;
+  invalidateSweep();schedule();
+});
+for(const p of ['ee','ei'])$(p).addEventListener('click',()=>{phase=p;for(const q of ['ee','ei'])$(q).setAttribute('aria-pressed',String(q===p));render();});
+$('reset').addEventListener('click',()=>{clearTimeout(timer);invalidateSweep();compare(true);});
+$('new-seeds').addEventListener('click',()=>{const seeds=new Uint32Array(2);crypto.getRandomValues(seeds);$('seed-a').value=seeds[0];$('seed-b').value=seeds[1];invalidateSweep();compare(true);});
+$('share').addEventListener('click',async()=>{
+  const url=new URL(location.href);url.search='';for(const k of ['peep','vt','rr','pbw','kind-a','kind-b','seed-a','seed-b'])url.searchParams.set(k,$(k).value);
+  try{await navigator.clipboard.writeText(url.href);$('status').textContent='Scenario link copied. It recreates the seeds and settings from fresh state; pressure history is not included.';}
+  catch{window.prompt('Copy this scenario link. It starts from fresh state.',url.href);}
+});
+$('sweep').addEventListener('click',()=>{$('sweep').disabled=true;$('sweep').textContent='Sweeping...';sweepId=++request;worker.postMessage({id:sweepId,type:'sweep',config:config(),settings:settings()});});
+$('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;worker.postMessage({id:++request,type:'benchmark'});});
+$('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS_sim_kh-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+const tabs=[...document.querySelectorAll('[role=tab]')];
+function selectTab(tab){for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
+tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectTab(tab));tab.addEventListener('keydown',e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();selectTab(tabs[next]);}});});
+window.addEventListener('resize',()=>{clearTimeout(window.ardsResize);window.ardsResize=setTimeout(render,100);});
+const params=new URLSearchParams(location.search);
+for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
+for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
+labels();drawSweep();compare(true);

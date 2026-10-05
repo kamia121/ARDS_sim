@@ -1,0 +1,629 @@
+
+> ards-sim-kh@0.1.0 test
+> node --test tests/*.test.mjs
+
+{
+  "passed": 12,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Independent analytic linear compartment reference",
+      "pass": true,
+      "ms": 1.8055090000000078,
+      "evidence": {
+        "expected": {
+          "eelv": 2300,
+          "crs": 50,
+          "expectedPlateau": 16.4
+        },
+        "measured": {
+          "eelv": 2300,
+          "vtDelivered": 420,
+          "pplat": 16.4,
+          "dp": 8.399999999999999,
+          "crs": 50.00000000000001,
+          "openEE": 1,
+          "openEI": 1,
+          "cyclic": 0,
+          "over": 0,
+          "closedPerfusion": 0,
+          "meanPleuralEE": 5,
+          "meanPleuralEI": 9.2,
+          "transpulmonaryEI": 7.199999999999999,
+          "volumeError": 0,
+          "volumeResidual": 0,
+          "limited": false
+        }
+      }
+    },
+    {
+      "name": "Volume conservation and regional volume sums at attainable targets",
+      "pass": true,
+      "ms": 153.680546,
+      "evidence": [
+        {
+          "kind": "high",
+          "volumeError": -1.5006662579253316e-11
+        },
+        {
+          "kind": "low",
+          "volumeError": -4.537241693469696e-10
+        },
+        {
+          "kind": "wall",
+          "volumeError": -1.2846612662542611e-11
+        },
+        {
+          "kind": "healthy",
+          "volumeError": -2.0054358174093068e-10
+        }
+      ]
+    },
+    {
+      "name": "Pressure ceiling reduces delivered VT, including target beyond capacity",
+      "pass": true,
+      "ms": 35.54826799999998,
+      "evidence": {
+        "ordinary": {
+          "eelv": 779.6620766375742,
+          "vtDelivered": 351.18111189005856,
+          "pplat": 20,
+          "dp": 12,
+          "crs": 29.26509265750488,
+          "openEE": 0.3528263690306755,
+          "openEI": 0.35832200692495153,
+          "cyclic": 0.005514940951654706,
+          "over": 0.12358065403390124,
+          "closedPerfusion": 0.7102206242844148,
+          "meanPleuralEE": 1.983789931788039,
+          "meanPleuralEI": 4.0908766031283905,
+          "transpulmonaryEI": 15.90912339687161,
+          "volumeError": -348.81888810994144,
+          "volumeResidual": 0,
+          "limited": true
+        },
+        "beyondCapacity": {
+          "eelv": 3581.424126710811,
+          "vtDelivered": 7.082599040586501e-8,
+          "pplat": 45.000000007418365,
+          "dp": 7.418364589284465e-9,
+          "crs": null,
+          "openEE": 0.9999999999574625,
+          "openEI": 0.9999999999771391,
+          "cyclic": 1.967539876851257e-11,
+          "over": 0,
+          "closedPerfusion": 4.160929207852113e-11,
+          "meanPleuralEE": 17.348650327615587,
+          "meanPleuralEI": 17.34865032832385,
+          "transpulmonaryEI": 27.651349679094515,
+          "volumeError": -2099.999999929174,
+          "volumeResidual": 0,
+          "limited": true
+        }
+      }
+    },
+    {
+      "name": "Nonlinear constitutive curve is monotone and stiffens at high positive TP",
+      "pass": true,
+      "ms": 3.30185400000002,
+      "evidence": {
+        "unitsChecked": 512
+      }
+    },
+    {
+      "name": "Persistent state creates recruitment hysteresis and sweep isolates original",
+      "pass": true,
+      "ms": 748.7395530000001,
+      "evidence": {
+        "up8": 0.382732776517959,
+        "down8": 0.4403533828486915,
+        "path": {
+          "ascending": [
+            {
+              "peep": 4,
+              "eelv": 538.2493237640809,
+              "vtDelivered": 419.9999999970736,
+              "pplat": 18.751143945130394,
+              "dp": 14.751143945130394,
+              "crs": 28.472368079339553,
+              "openEE": 0.28532667597960965,
+              "openEI": 0.3023380770555254,
+              "cyclic": 0.017090703776529128,
+              "over": 0.11222455941010663,
+              "closedPerfusion": 0.7859360518999008,
+              "meanPleuralEE": 0.5353134145470793,
+              "meanPleuralEI": 3.055313414529521,
+              "transpulmonaryEI": 15.695830530600873,
+              "volumeError": -2.9264128897921182e-9,
+              "volumeResidual": -2.9264128897921182e-9,
+              "limited": false
+            },
+            {
+              "peep": 8,
+              "eelv": 837.2205760934107,
+              "vtDelivered": 419.9999999806746,
+              "pplat": 21.358477087461498,
+              "dp": 13.358477087461498,
+              "crs": 31.44070968799984,
+              "openEE": 0.382732776517959,
+              "openEI": 0.39216544463014547,
+              "cyclic": 0.009434570420782164,
+              "over": 0.19757294768627132,
+              "closedPerfusion": 0.698416058806513,
+              "meanPleuralEE": 2.329140928523058,
+              "meanPleuralEI": 4.849140928407106,
+              "transpulmonaryEI": 16.509336159054392,
+              "volumeError": -1.9325398170622066e-8,
+              "volumeResidual": -1.9325398170622066e-8,
+              "limited": false
+            },
+            {
+              "peep": 12,
+              "eelv": 1158.147142905501,
+              "vtDelivered": 419.9999999995091,
+              "pplat": 24.34676213938854,
+              "dp": 12.346762139388542,
+              "crs": 34.01701557525179,
+              "openEE": 0.47775679651661346,
+              "openEI": 0.4837683246274751,
+              "cyclic": 0.006012887876625465,
+              "over": 0.32539928845585825,
+              "closedPerfusion": 0.6015863289383824,
+              "meanPleuralEE": 4.254700329395599,
+              "meanPleuralEI": 6.774700329392655,
+              "transpulmonaryEI": 17.572061809995887,
+              "volumeError": -4.90899765281938e-10,
+              "volumeResidual": -4.90899765281938e-10,
+              "limited": false
+            },
+            {
+              "peep": 16,
+              "eelv": 1503.1606913548364,
+              "vtDelivered": 419.9999999998247,
+              "pplat": 27.691079824351345,
+              "dp": 11.691079824351345,
+              "crs": 35.92482527790178,
+              "openEE": 0.5741571425745225,
+              "openEI": 0.5774231703196506,
+              "cyclic": 0.0032661432984571422,
+              "over": 0.4722365282505031,
+              "closedPerfusion": 0.49675289688263086,
+              "meanPleuralEE": 6.3247816200916125,
+              "meanPleuralEI": 8.844781620090561,
+              "transpulmonaryEI": 18.846298204260783,
+              "volumeError": -1.7530510376673192e-10,
+              "volumeResidual": -1.7530510376673192e-10,
+              "limited": false
+            },
+            {
+              "peep": 20,
+              "eelv": 1853.1703307780876,
+              "vtDelivered": 420.0000000000009,
+              "pplat": 31.294451999637815,
+              "dp": 11.294451999637815,
+              "crs": 37.18639912883505,
+              "openEE": 0.6646729340023975,
+              "openEI": 0.6674154077777211,
+              "cyclic": 0.002742473775323473,
+              "over": 0.6308123473331513,
+              "closedPerfusion": 0.39585086335812547,
+              "meanPleuralEE": 8.424839456631119,
+              "meanPleuralEI": 10.944839456631126,
+              "transpulmonaryEI": 20.34961254300669,
+              "volumeError": 9.094947017729282e-13,
+              "volumeResidual": 9.094947017729282e-13,
+              "limited": false
+            }
+          ],
+          "descending": [
+            {
+              "peep": 20,
+              "eelv": 1884.7059841084454,
+              "vtDelivered": 419.9999999999943,
+              "pplat": 31.037162353990848,
+              "dp": 11.037162353990848,
+              "crs": 38.05325921006585,
+              "openEE": 0.6807116454327099,
+              "openEI": 0.6816969630767109,
+              "cyclic": 0.0009853176440009976,
+              "over": 0.6197863424297806,
+              "closedPerfusion": 0.3782602223511176,
+              "meanPleuralEE": 8.614053376613267,
+              "meanPleuralEI": 11.134053376613231,
+              "transpulmonaryEI": 19.903108977377617,
+              "volumeError": -5.6843418860808015e-12,
+              "volumeResidual": -5.9117155615240335e-12,
+              "limited": false
+            },
+            {
+              "peep": 16,
+              "eelv": 1633.4436479100268,
+              "vtDelivered": 419.999999999764,
+              "pplat": 26.024665548093758,
+              "dp": 10.024665548093758,
+              "crs": 41.8966595927611,
+              "openEE": 0.6462002247830179,
+              "openEI": 0.646691646056101,
+              "cyclic": 0.0005081870362255138,
+              "over": 0.24295712209785933,
+              "closedPerfusion": 0.42596623012138135,
+              "meanPleuralEE": 7.106479359422755,
+              "meanPleuralEI": 9.626479359421339,
+              "transpulmonaryEI": 16.39818618867242,
+              "volumeError": -2.360138751100749e-10,
+              "volumeResidual": -2.360138751100749e-10,
+              "limited": false
+            },
+            {
+              "peep": 12,
+              "eelv": 1297.546848843626,
+              "vtDelivered": 419.9999999998613,
+              "pplat": 22.19534180922129,
+              "dp": 10.19534180922129,
+              "crs": 41.19528387169792,
+              "openEE": 0.5592088569927857,
+              "openEI": 0.5610635442389037,
+              "cyclic": 0.001888199847232253,
+              "over": 0.07003858332980298,
+              "closedPerfusion": 0.5327035370929641,
+              "meanPleuralEE": 5.0910985650243505,
+              "meanPleuralEI": 7.611098565023518,
+              "transpulmonaryEI": 14.584243244197772,
+              "volumeError": -1.3869794202037156e-10,
+              "volumeResidual": -1.3869794202037156e-10,
+              "limited": false
+            },
+            {
+              "peep": 8,
+              "eelv": 932.7427260061414,
+              "vtDelivered": 419.9999999999094,
+              "pplat": 19.530964103134203,
+              "dp": 11.530964103134203,
+              "crs": 36.42366728778127,
+              "openEE": 0.4403533828486915,
+              "openEI": 0.4439510765035602,
+              "cyclic": 0.0036343875502700125,
+              "over": 0.036654875565703425,
+              "closedPerfusion": 0.6592216868787899,
+              "meanPleuralEE": 2.9022738279994424,
+              "meanPleuralEI": 5.4222738279988985,
+              "transpulmonaryEI": 14.108690275135304,
+              "volumeError": -9.060840966412798e-11,
+              "volumeResidual": -9.049472282640636e-11,
+              "limited": false
+            },
+            {
+              "peep": 4,
+              "eelv": 582.326808160535,
+              "vtDelivered": 419.99999999745364,
+              "pplat": 17.947811654029238,
+              "dp": 13.947811654029238,
+              "crs": 30.11225061073464,
+              "openEE": 0.3118979687472696,
+              "openEI": 0.3220698121708654,
+              "cyclic": 0.010202562141857701,
+              "over": 0.06304658672126899,
+              "closedPerfusion": 0.773615926815955,
+              "meanPleuralEE": 0.799778320925804,
+              "meanPleuralEI": 3.319778320910526,
+              "transpulmonaryEI": 14.628033333118712,
+              "volumeError": -2.546357791288756e-9,
+              "volumeResidual": -2.546357791288756e-9,
+              "limited": false
+            }
+          ],
+          "breathsPerStep": 10,
+          "dt": 0.1,
+          "initialStateSource": "Fresh seeded patient; sequential ascending then descending path"
+        }
+      }
+    },
+    {
+      "name": "Opening/closure pressure thresholds retain a history-dependent state",
+      "pass": true,
+      "ms": 0.715989000000036,
+      "evidence": {
+        "lowState": 0.1,
+        "highState": 0.9
+      }
+    },
+    {
+      "name": "Seed repeatability and wall phenotype preserves exact lung assumptions",
+      "pass": true,
+      "ms": 71.35671400000001,
+      "evidence": {
+        "seed": 17,
+        "unitCount": 512
+      }
+    },
+    {
+      "name": "Chest-wall offset and elastance have distinct analytic effects",
+      "pass": true,
+      "ms": 0.48894700000005287,
+      "evidence": {
+        "base": {
+          "eelv": 2300,
+          "vtDelivered": 420,
+          "pplat": 16.4,
+          "dp": 8.399999999999999,
+          "crs": 50.00000000000001,
+          "openEE": 1,
+          "openEI": 1,
+          "cyclic": 0,
+          "over": 0,
+          "closedPerfusion": 0,
+          "meanPleuralEE": 5,
+          "meanPleuralEI": 9.2,
+          "transpulmonaryEI": 7.199999999999999,
+          "volumeError": 0,
+          "volumeResidual": 0,
+          "limited": false
+        },
+        "offset": {
+          "eelv": 2050,
+          "vtDelivered": 420,
+          "pplat": 16.4,
+          "dp": 8.399999999999999,
+          "crs": 50.00000000000001,
+          "openEE": 1,
+          "openEI": 1,
+          "cyclic": 0,
+          "over": 0,
+          "closedPerfusion": 0,
+          "meanPleuralEE": 7.5,
+          "meanPleuralEI": 11.7,
+          "transpulmonaryEI": 4.699999999999999,
+          "volumeError": 0,
+          "volumeResidual": 0,
+          "limited": false
+        },
+        "stiff": {
+          "eelv": 2200,
+          "vtDelivered": 420,
+          "pplat": 20.599999999999998,
+          "dp": 12.599999999999998,
+          "crs": 33.333333333333336,
+          "openEE": 1,
+          "openEI": 1,
+          "cyclic": 0,
+          "over": 0,
+          "closedPerfusion": 0,
+          "meanPleuralEE": 6,
+          "meanPleuralEI": 14.4,
+          "transpulmonaryEI": 6.1999999999999975,
+          "volumeError": 0,
+          "volumeResidual": 0,
+          "limited": false
+        }
+      }
+    },
+    {
+      "name": "Timestep refinement decreases error against the finer result",
+      "pass": true,
+      "ms": 399.11647199999993,
+      "evidence": {
+        "runs": [
+          {
+            "dt": 0.1,
+            "eelv": 1197.5719534940015,
+            "vtDelivered": 419.99999999995975,
+            "pplat": 23.328380759132298,
+            "dp": 11.328380759132298,
+            "crs": 37.07502501285363,
+            "openEE": 0.5037045831476553,
+            "openEI": 0.5100987726999286,
+            "cyclic": 0.006431546736968257,
+            "over": 0.20040611536785488,
+            "closedPerfusion": 0.5668640078014343,
+            "meanPleuralEE": 4.4912491929266025,
+            "meanPleuralEI": 7.011249192926361,
+            "transpulmonaryEI": 16.317131566205937,
+            "volumeError": -4.0245140553452075e-11,
+            "volumeResidual": -4.0245140553452075e-11,
+            "limited": false
+          },
+          {
+            "dt": 0.05,
+            "eelv": 1193.5501721323853,
+            "vtDelivered": 419.99999959987235,
+            "pplat": 23.426481130003776,
+            "dp": 11.426481130003776,
+            "crs": 36.75672281093012,
+            "openEE": 0.501348863423107,
+            "openEI": 0.5075029688492467,
+            "cyclic": 0.006199907536854102,
+            "over": 0.21337600836967296,
+            "closedPerfusion": 0.5690340556111151,
+            "meanPleuralEE": 4.467118504756906,
+            "meanPleuralEI": 6.9871185023561395,
+            "transpulmonaryEI": 16.439362627647636,
+            "volumeError": -4.001276465714909e-7,
+            "volumeResidual": -4.001276465714909e-7,
+            "limited": false
+          },
+          {
+            "dt": 0.025,
+            "eelv": 1191.4291811881599,
+            "vtDelivered": 419.9999980167895,
+            "pplat": 23.478873080892203,
+            "dp": 11.478873080892203,
+            "crs": 36.588957387805245,
+            "openEE": 0.5001077450981415,
+            "openEI": 0.5061347882035062,
+            "cyclic": 0.006078505550728077,
+            "over": 0.22035891340275557,
+            "closedPerfusion": 0.5701781893945292,
+            "meanPleuralEE": 4.454392559091553,
+            "meanPleuralEI": 6.97439254719229,
+            "transpulmonaryEI": 16.504480533699912,
+            "volumeError": -0.0000019832104953820817,
+            "volumeResidual": -0.0000019832104953820817,
+            "limited": false
+          },
+          {
+            "dt": 0.0125,
+            "eelv": 1190.3258558316084,
+            "vtDelivered": 419.99999983548514,
+            "pplat": 23.50620616342602,
+            "dp": 11.506206163426022,
+            "crs": 36.50204019205826,
+            "openEE": 0.4994629577723141,
+            "openEI": 0.5054249869817408,
+            "cyclic": 0.0060164624135881925,
+            "over": 0.22454580807452826,
+            "closedPerfusion": 0.5707733755233905,
+            "meanPleuralEE": 4.447772606952244,
+            "meanPleuralEI": 6.9677726059651555,
+            "transpulmonaryEI": 16.538433557460866,
+            "volumeError": -1.645148586248979e-7,
+            "volumeResidual": -1.645148586248979e-7,
+            "limited": false
+          }
+        ],
+        "errors": [
+          {
+            "dt": 0.1,
+            "pressure": 0.17782540429372418,
+            "aeration": 0.004241625375341229,
+            "volume": 7.24609766239314
+          },
+          {
+            "dt": 0.05,
+            "pressure": 0.07972503342224613,
+            "aeration": 0.0018859056507929406,
+            "volume": 3.224316300776991
+          },
+          {
+            "dt": 0.025,
+            "pressure": 0.027333082533818498,
+            "aeration": 0.0006447873258274006,
+            "volume": 1.1033253565515224
+          }
+        ],
+        "note": "The discontinuous high-strain cutoff is more resolution-sensitive than smooth mechanics."
+      }
+    },
+    {
+      "name": "Seed variability and measured high versus low recruitment response",
+      "pass": true,
+      "ms": 2720.056557,
+      "evidence": {
+        "baselineAeration": [
+          0.39441340295503674,
+          0.40037399495940057,
+          0.40095792422814847,
+          0.41382127108487626,
+          0.39937517652412746
+        ],
+        "responses": [
+          {
+            "seed": 17,
+            "highGain": 0.3839515242455108,
+            "lowGain": 0.1719427146208948
+          },
+          {
+            "seed": 31,
+            "highGain": 0.3665885331816383,
+            "lowGain": 0.18219203454082883
+          },
+          {
+            "seed": 53,
+            "highGain": 0.35913407620549154,
+            "lowGain": 0.2083300008142992
+          },
+          {
+            "seed": 79,
+            "highGain": 0.3702001932632782,
+            "lowGain": 0.189947322351313
+          },
+          {
+            "seed": 13791,
+            "highGain": 0.3793462580227878,
+            "lowGain": 0.19402056159247455
+          }
+        ]
+      }
+    },
+    {
+      "name": "Numerical regional resolution is quantified, not assumed identical",
+      "pass": true,
+      "ms": 146.22672499999953,
+      "evidence": {
+        "runs": [
+          {
+            "count": 128,
+            "eelv": 1164.6553906184497,
+            "vtDelivered": 419.9999999746253,
+            "pplat": 23.830870024666964,
+            "dp": 11.830870024666964,
+            "crs": 35.50034774272218,
+            "openEE": 0.4878912054010897,
+            "openEI": 0.493961168320327,
+            "cyclic": 0.006096420998861782,
+            "over": 0.24405401871531437,
+            "closedPerfusion": 0.5761366130752501,
+            "meanPleuralEE": 4.424224363097965,
+            "meanPleuralEI": 6.944224362945717,
+            "transpulmonaryEI": 16.886645661721246,
+            "volumeError": -2.5374674805789255e-8,
+            "volumeResidual": -2.5374674805789255e-8,
+            "limited": false
+          },
+          {
+            "count": 512,
+            "eelv": 1197.5719534940015,
+            "vtDelivered": 419.99999999995975,
+            "pplat": 23.328380759132298,
+            "dp": 11.328380759132298,
+            "crs": 37.07502501285363,
+            "openEE": 0.5037045831476553,
+            "openEI": 0.5100987726999286,
+            "cyclic": 0.006431546736968257,
+            "over": 0.20040611536785488,
+            "closedPerfusion": 0.5668640078014343,
+            "meanPleuralEE": 4.4912491929266025,
+            "meanPleuralEI": 7.011249192926361,
+            "transpulmonaryEI": 16.317131566205937,
+            "volumeError": -4.0245140553452075e-11,
+            "volumeResidual": -4.0245140553452075e-11,
+            "limited": false
+          },
+          {
+            "count": 2048,
+            "eelv": 1195.8966462641308,
+            "vtDelivered": 419.9999999999634,
+            "pplat": 23.299080565480704,
+            "dp": 11.299080565480704,
+            "crs": 37.17116605780172,
+            "openEE": 0.49979647964465995,
+            "openEI": 0.5058197073423911,
+            "cyclic": 0.006056537745367688,
+            "over": 0.20975649296885854,
+            "closedPerfusion": 0.5702403212985258,
+            "meanPleuralEE": 4.509275383921582,
+            "meanPleuralEI": 7.029275383921362,
+            "transpulmonaryEI": 16.26980518155934,
+            "volumeError": -3.660716174636036e-11,
+            "volumeResidual": -3.660716174636036e-11,
+            "limited": false
+          }
+        ],
+        "note": "Changing unit count changes Monte Carlo sampling; this is stochastic regional resolution, not deterministic mesh convergence."
+      }
+    },
+    {
+      "name": "Fractions, serialization, persistent elapsed time and input rejection",
+      "pass": true,
+      "ms": 36.919817999999395
+    }
+  ]
+}
+✔ tests/engine.test.mjs (4409.059082ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4418.359726

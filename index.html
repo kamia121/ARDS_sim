@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#133e49">
+  <meta name="description" content="Explore how the same PEEP changes recruitment and regional strain in different simulated ARDS lungs.">
+  <title>ARDS_sim_kh | Regional lung lab</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+<header class="masthead"><a href="./" class="wordmark">ARDS<span>_sim_kh</span></a><span class="edition">EDUCATIONAL PHYSIOLOGY / v0.1</span></header>
+<main>
+  <section class="intro"><div><p class="eyebrow">REGIONAL LUNG LAB</p><h1>Same PEEP.<br>Different lungs.</h1><p class="lede">See recruitment, intratidal aeration changes, and regional distension emerge from the mechanics of two seeded patients.</p></div><div class="intro-note"><strong>Ask before you adjust</strong><p>When PEEP rises, does the functional lung grow, or does the already open lung take more of the load?</p></div></section>
+  <nav class="tabs" role="tablist" aria-label="Workspaces"><button type="button" class="active" id="tab-explore" role="tab" aria-selected="true" aria-controls="explore">Explore</button><button type="button" id="tab-benchmarks" role="tab" aria-selected="false" aria-controls="benchmarks">Benchmarks</button><button type="button" id="tab-model" role="tab" aria-selected="false" aria-controls="model">Model &amp; assumptions</button></nav>
+  <section id="explore" role="tabpanel" aria-labelledby="tab-explore">
+    <div class="controls">
+      <label for="peep">PEEP <output id="peep-value">8</output><span>cmH2O</span><input id="peep" type="range" min="4" max="24" step="1" value="8"></label>
+      <label for="vt">Tidal volume <output id="vt-value">6</output><span>mL/kg PBW</span><input id="vt" type="range" min="4" max="8" step="0.5" value="6"></label>
+      <label for="rr">Respiratory rate <output id="rr-value">20</output><span>/min</span><input id="rr" type="range" min="12" max="30" step="1" value="20"></label>
+      <label for="pbw">Predicted body weight <output id="pbw-value">70</output><span>kg</span><input id="pbw" type="range" min="50" max="100" step="5" value="70"></label>
+    </div>
+    <div class="toolbar"><div class="phase" role="group" aria-label="Lung map phase"><button id="ee" type="button" aria-pressed="true">End expiration</button><button id="ei" type="button" aria-pressed="false">End inspiration</button></div><div class="actions"><button type="button" id="reset">Reset patients</button><button type="button" id="new-seeds">New seeds</button><button type="button" id="share">Copy scenario link</button></div></div>
+    <p id="status" class="status" aria-live="polite">Preparing the two patients...</p>
+    <div class="patients">
+      <article class="patient" id="patient-a"><header><div><p class="eyebrow">PATIENT A</p><label class="sr-only" for="kind-a">Patient A phenotype</label><select id="kind-a"><option value="high">Higher recruitability</option><option value="low">Lower recruitability</option><option value="wall">Higher chest-wall load</option><option value="healthy">Healthy mechanics reference</option></select></div><label class="seed" for="seed-a">Seed<input type="number" id="seed-a" min="0" max="4294967295" step="1" value="13791"></label></header><div class="map-wrap"><span class="orientation">Nondependent</span><canvas id="map-a" role="img" aria-label="Patient A regional lung map"></canvas><span class="orientation">Dependent / supine schematic</span></div><p id="unit-a" class="unit-detail">Select a lung unit to inspect its state.</p><p id="delivery-a" class="delivery"></p><div id="metrics-a" class="metrics"></div></article>
+      <article class="patient" id="patient-b"><header><div><p class="eyebrow">PATIENT B</p><label class="sr-only" for="kind-b">Patient B phenotype</label><select id="kind-b"><option value="low">Lower recruitability</option><option value="high">Higher recruitability</option><option value="wall">Higher chest-wall load</option><option value="healthy">Healthy mechanics reference</option></select></div><label class="seed" for="seed-b">Seed<input type="number" id="seed-b" min="0" max="4294967295" step="1" value="14602"></label></header><div class="map-wrap"><span class="orientation">Nondependent</span><canvas id="map-b" role="img" aria-label="Patient B regional lung map"></canvas><span class="orientation">Dependent / supine schematic</span></div><p id="unit-b" class="unit-detail">Select a lung unit to inspect its state.</p><p id="delivery-b" class="delivery"></p><div id="metrics-b" class="metrics"></div></article>
+    </div>
+    <div class="legend" aria-label="Map states"><span><i class="closed"></i>Closed</span><span><i class="cyclic"></i>Intratidal aeration change</span><span><i class="open"></i>Aerated</span><span><i class="over"></i>High volume ratio</span><span class="legend-note">512 weighted units per lung; schematic locations</span></div>
+    <div class="chart-grid"><section class="chart-panel"><header><div><p class="eyebrow">LAST SIMULATED BREATH</p><h2>Pressure-volume response</h2></div><span class="chart-key"><i class="line-a"></i>A <i class="line-b"></i>B</span></header><svg id="pv-chart" role="img" aria-label="Pressure-volume loops of both patients"></svg><p class="caption">Quasi-static airway pressure. These are model loops, not ventilator flow waveforms.</p></section><section class="chart-panel"><header><div><p class="eyebrow">CONTROLLED EXPERIMENT</p><h2>Recruitment versus strain</h2></div><button id="sweep" type="button">Run PEEP sweep</button></header><svg id="sweep-chart" role="img" aria-label="PEEP sweep showing aeration and high strain"></svg><p id="sweep-caption" class="caption">Run a standardized ascending and descending sweep in both patients. The active patients are preserved.</p></section></div>
+    <details class="lesson"><summary>Bedside teaching prompts</summary><div><p>At a fixed tidal volume, predict what will happen to driving pressure when PEEP rises. Then compare the two patients.</p><p>Return PEEP to the starting value. Does the lung return to its previous state? Explain the effect of pressure history.</p><p>Compare the higher chest-wall load phenotype with the higher recruitability phenotype using the same seed. Which pressure describes the load on lung tissue?</p><p>Increase tidal volume. Does a lower driving pressure alone guarantee less regional strain?</p></div></details>
+  </section>
+  <section id="benchmarks" role="tabpanel" aria-labelledby="tab-benchmarks" hidden>
+    <div class="section-heading"><div><p class="eyebrow">MEASURED, NOT ASSUMED</p><h2>Benchmark this device</h2></div><button type="button" id="run-benchmark" class="primary">Run device benchmark</button></div>
+    <p class="body-copy">Measure isolated engine time at 128, 512, and 2,048 units. Each timed run starts from a fresh seed and simulates 10 breaths. The worker keeps the interface responsive. This is a speed benchmark, not clinical validation.</p>
+    <p id="benchmark-status" class="status" aria-live="polite">No device benchmark has run.</p>
+    <div class="table-scroll"><table><thead><tr><th>Units</th><th>Median / 10 breaths</th><th>95th percentile</th><th>Simulated seconds / real second</th></tr></thead><tbody id="benchmark-rows"><tr><td colspan="4">Run the benchmark to measure this browser.</td></tr></tbody></table></div>
+    <div class="actions"><button id="export-benchmark" type="button" disabled>Download device results</button><a href="./docs/BENCHMARK_REPORT.md">Recorded benchmark report</a><a href="./benchmarks/results-engine.json">Raw engine results</a></div>
+    <h3>What the checks establish</h3><div class="verification-grid"><div><strong>Numerical verification</strong><p>Volume residuals, pressure-limit handling, monotonic pressure-volume behavior, reproducible seeds, and timestep refinement.</p></div><div><strong>Physiological plausibility</strong><p>Recruitment history, different PEEP responses, chest-wall effects, and regional strain. These checks support the teaching model's internal behavior.</p></div><div><strong>External validation remains open</strong><p>No CT, EIT, patient waveform, or experimental lung dataset has calibrated this release. Simulated outputs do not identify a patient's best PEEP.</p></div><div><strong>Performance has a scope</strong><p>Measured engine latency depends on hardware, browser, unit count, and timestep. Mobile layout tests do not measure an actual phone's CPU.</p></div></div>
+  </section>
+  <section id="model" role="tabpanel" aria-labelledby="tab-model" hidden>
+    <p class="eyebrow">TRANSPARENT PHYSIOLOGY</p><h2>A small model with explicit assumptions</h2><p class="body-copy">The lung is a weighted set of heterogeneous regional units. Each unit retains an open fraction across breaths. Its nonlinear pressure-volume curve stiffens at higher distension. A shared chest wall couples the units.</p>
+    <div id="model-info" class="model-info"></div>
+    <h3>Read and review</h3><div class="document-links"><a href="./docs/MODEL_SPEC.md">Equations and parameter assumptions</a><a href="./docs/ENGINE_DECISION.md">Existing engine trial and integration decision</a><a href="./docs/CLAUDE_REVIEW_BRIEF.md">Independent Claude review brief</a><a href="./docs/LOCAL_HANDOFF.md">Mac / Windows development handoff</a></div>
+    <h3>Source foundations</h3><p class="body-copy"><a href="https://pulse.kitware.com/_respiratory_methodology.html">Pulse respiratory methodology</a> and <a href="https://github.com/explain-labs/explain-engine">Explain Engine</a> informed the architecture comparison. <a href="https://www.frontiersin.org/journals/network-physiology/articles/10.3389/fnetp.2023.1257710/full">Ma et al., 2023</a> provides a published example of pressure- and time-dependent regional recruitment. The parameters in this application are illustrative, not parameters calibrated from these publications.</p>
+  </section>
+  <footer><strong>For education.</strong> Passive quasi-static mechanics. No spontaneous effort, cardiovascular feedback, or blood-gas prediction. Regional strain thresholds and perfused closed fractions are illustrative model measures.</footer>
+</main>
+</body>
+</html>
