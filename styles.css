@@ -57,3 +57,7 @@ main{max-width:1440px}.intro{padding:18px 0 12px}.intro h1{margin-bottom:6px;fon
 /* Leave the observed lung clear of the sticky replay bar after Apply & watch. */
 .patient,.map-wrap canvas{scroll-margin-top:calc(var(--breath-panel-height,160px) + 20px)}
 @media(max-width:800px){.patient,.map-wrap canvas{scroll-margin-top:calc(var(--control-dock-height,205px) + var(--breath-panel-height,160px) + 12px)}}
+
+.mechanics-selector{display:block;font-size:12px;margin-bottom:10px;color:var(--muted)}.mechanics-selector select{font-size:14px;max-width:none}.mode-context{border-left:3px solid var(--a);padding:4px 10px;font-size:13px;margin:4px 0 10px}.control-dock .controls:has(#resistance-control:not([hidden])){gap:8px}#flow-panel{margin:12px 0}.retained-gas{background:#798ec5}#airflow-assumptions{font-size:14px;margin:12px 0}#airflow-assumptions summary{cursor:pointer}
+@media(max-width:800px){.mechanics-selector{display:flex;align-items:center;gap:8px;margin:0 0 4px}.mechanics-selector select{flex:1;min-height:34px;padding:3px 8px}.controls #resistance-control{grid-column:auto}.control-dock .controls:has(#resistance-control:not([hidden])){grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.controls #resistance-control{grid-column:auto}.control-dock .controls:has(#resistance-control:not([hidden])){grid-template-columns:1fr 1fr}.mechanics-selector{font-size:11px}.mechanics-selector select{font-size:12px}}

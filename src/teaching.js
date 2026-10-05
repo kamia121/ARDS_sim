@@ -87,3 +87,23 @@ export function evaluatePrediction(question,before,after,prediction){
  const observed=question.betweenPatients?`${question.label}: A ${a.toFixed(1)} vs B ${b.toFixed(1)} ${question.unit}.`:`${question.label}: ${a.toFixed(1)} → ${b.toFixed(1)} ${question.unit}.`;
  return {expected,correct:['up','same','down'].includes(prediction)?prediction===expected:null,observed};
 }
+
+export const FLOW_LESSONS={
+ 'flow-resistance':{name:'Resistance and emptying',kinds:['high','low'],baseline:{peep:8,vt:6,rr:20,pbw:70,resistance:8},adjustment:{resistance:16},instruction:'Increase central airway resistance while keeping aeration fixed. Compare pressure cost, flow and gas remaining after expiration.',reflection:'A local regional RC estimate excludes shared airway resistance and chest-wall coupling. Does local RC alone explain the observed emptying? '},
+ 'flow-rate':{name:'Shorter expiration',kinds:['high','low'],baseline:{peep:8,vt:6,rr:20,pbw:70,resistance:8},adjustment:{rr:30},instruction:'Raise respiratory rate at the same requested tidal volume. Inspiration and expiration both become shorter; aeration is held fixed.',reflection:'Compare the end-expiratory flow with retained excess volume. The model may not return to its relaxed PEEP volume before the next breath.'}
+};
+export function airflowQuestion(lesson,level='student'){
+ const resistance=lesson==='flow-resistance';
+ if(level==='resident')return {metric:'ppeak',patient:0,label:'A’s peak airway pressure',scale:1,unit:'cmH2O',band:.5,prompt:resistance?'Resistance 8 → 16: how will A’s peak airway pressure change?':'Rate 20 → 30: how will A’s peak airway pressure change at the same tidal volume?',focus:'Airway opening pressure includes resistive pressure. It is not a measured plateau.'};
+ if(level==='fellow')return {metric:'fractionEmptied',patient:0,label:'A’s fraction of excess gas emptied',scale:100,unit:'%',band:1,prompt:resistance?'As central resistance rises, how will the fraction of excess gas emptied change?':'With shorter expiration, how will the fraction of excess gas emptied change?',focus:'The fraction is relative to the frozen relaxed PEEP volume; local RC is not the full coupled-network emptying time.'};
+ return {metric:'retainedVolume',patient:0,label:'A’s excess gas retained at expiration',scale:1,unit:'mL',band:.5,prompt:resistance?'Resistance 8 → 16: will more excess gas remain after expiration?':'Rate 20 → 30: will more excess gas remain after expiration?',focus:'Watch the flow approach zero. If gas is still leaving when expiration ends, emptying is incomplete in this model.'};
+}
+Object.assign(METRIC_HELP,{
+ ppeak:'Peak pressure at the airway opening, including central and regional resistive loads. This is not plateau pressure.',
+ fractionEmptied:'Fraction of gas above the relaxed frozen PEEP reference removed during expiration: (EI excess − end-expiratory excess) / EI excess. It is not expired tidal volume divided by inspired tidal volume.',
+ retainedVolume:'End-expiratory gas above the relaxed PEEP volume with aeration held fixed. This is a model quantity, not a measured clinical intrinsic PEEP.',
+ tauEquivalent:'A single-compartment-equivalent time constant from effective resistance and frozen chord respiratory compliance. It is exact for a homogeneous network, not each heterogeneous region.',
+ complianceInput:'Frozen-aeration chord compliance plus chest-wall coupling, used as an input to the airflow experiment. It is not measured dynamic compliance.',
+ virtualEndHoldPressure:'Pressure estimated after hypothetical complete equilibration at fixed end-inspiratory total gas volume. No actual occlusion maneuver is simulated.',
+ virtualAutoPeep:'Excess pressure estimated after hypothetical complete equilibration of end-expiratory excess gas. This is not a measured clinical auto-PEEP.'
+});

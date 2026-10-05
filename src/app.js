@@ -1,5 +1,5 @@
 import {sampleTrajectory,frameLabel} from './playback.js';
-import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment,predictionQuestion,evaluatePrediction} from './teaching.js';
+import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment,predictionQuestion,evaluatePrediction,FLOW_LESSONS,airflowQuestion} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
 let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,benchmarkId=0,phase='ee',timer,positions={};
@@ -9,14 +9,20 @@ let currentFrames=[],currentFrameIndex=0,replayTime=0,raf=0,playing=false,wantPl
 const scoredQuestions=new Set();
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 const mapGeometry={};
+let recruitmentLesson='recruitment';
+const recruitmentOptions=$('lesson').innerHTML,recruitmentLegend=document.querySelector('.legend').innerHTML,recruitmentHelp=$('map-help').innerHTML;
+const isAirflow=()=>$('mechanics-mode').value==='airflow';
+const flowParams=()=>({R0:+$('resistance').value/1000,Rp:.004});
+const currentQuestion=()=>isAirflow()?airflowQuestion($('lesson').value,$('learner-level').value):predictionQuestion($('lesson').value,$('learner-level').value);
+const currentLesson=()=>isAirflow()?FLOW_LESSONS[$('lesson').value]:LESSONS[$('lesson').value];
 const colors={};
 function refreshColors(){const css=getComputedStyle(document.documentElement);for(const [key,token] of Object.entries({a:'--mon-current',b:'--mon-snap',open:'--open',cyclic:'--cyclic',over:'--over',closed:'--closed',surface:'--surface-2',grid:'--mon-grid'}))colors[key]=css.getPropertyValue(token).trim();}
 refreshColors();
 const fmt=(x,n=0)=>Number.isFinite(x)?x.toFixed(n):'--';
-const pct=x=>fmt(x*100)+'%';
+const pct=x=>Number.isFinite(x)?fmt(x*100)+'%':'--';
 function settings(){return {peep:+$('peep').value,vt:+$('vt').value,rr:+$('rr').value,pressureLimit:45};}
 function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number($('seed-'+k).value)>>>0,pbw:+$('pbw').value}));}
-function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
+function labels(){for(const k of ['peep','vt','rr','pbw','resistance'])$(k+'-value').textContent=$(k).value;}
 function clearComparison(){ $('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren(); }
 function invalidateComparison(configurationChanged=false){
   pausePlayback(false);predictionPending=null;$('prediction-feedback').textContent='';compareId=++request;compareContext=null;clearComparison();
@@ -29,12 +35,13 @@ function invalidateComparison(configurationChanged=false){
   for(const k of ['a','b'])$('patient-'+k).setAttribute('aria-busy','true');
 }
 function compare(reset=false,recordBaseline=false){
-  pausePlayback(false);comparisonFresh=reset||$('guided-mode').checked||acceptedStateToken===null||acceptedConfig!==JSON.stringify(config());labels();clearComparison();
-  $('status').textContent='Simulating 10 breaths in each patient...';$('status').removeAttribute('role');
+  pausePlayback(false);comparisonFresh=isAirflow()||reset||$('guided-mode').checked||acceptedStateToken===null||acceptedConfig!==JSON.stringify(config());labels();clearComparison();
+  $('status').textContent=isAirflow()?'Computing pressure-driven airflow and emptying…':'Simulating 10 breaths in each patient...';$('status').removeAttribute('role');
   compareId=++request;const currentConfig=config(),currentSettings=settings();comparisonConfig=JSON.stringify(currentConfig);
-  compareContext={id:compareId,config:comparisonConfig,settings:currentSettings,fresh:comparisonFresh};
+  const prepareAirflow=isAirflow()&&(acceptedStateToken===null||acceptedConfig!==comparisonConfig||(reset&&recordBaseline));
+  compareContext={id:compareId,config:comparisonConfig,settings:currentSettings,fresh:comparisonFresh,mode:$('mechanics-mode').value,params:flowParams(),prepareAirflow,recordBaseline};
   if(recordBaseline){baselineRequest=compareId;baselineExpected={...compareContext,lesson:$('lesson').value};}
-  worker.postMessage({id:compareId,type:'compare',config:currentConfig,settings:currentSettings,reset:comparisonFresh,baseStateToken:acceptedStateToken,recordTrajectory:true});
+  worker.postMessage({id:compareId,type:isAirflow()&&!prepareAirflow?'airflow':'compare',config:currentConfig,settings:currentSettings,params:flowParams(),reset:prepareAirflow||comparisonFresh,baseStateToken:acceptedStateToken,recordTrajectory:!prepareAirflow});
 }
 function schedule(reset=false,configurationChanged=false){invalidateComparison(configurationChanged);clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
 function metric(label,value,unit='',secondary=false,helpKey='',delta=''){
@@ -45,6 +52,7 @@ function metric(label,value,unit='',secondary=false,helpKey='',delta=''){
   e.append(v,l);if(delta){const chip=document.createElement('small');chip.className='metric-delta';chip.textContent=delta;e.append(chip);}return e;
 }
 function updateMetrics(k,result){
+  if(result.trajectory?.kind==='frozen-aeration-airflow'){updateAirflowMetrics(k,result);return;}
   const m=result.metrics,box=$('metrics-'+k),before=comparisonFresh&&$('guided-mode').checked?baseline?.[k==='a'?0:1]?.metrics:null;
   const delta=(key,multiplier=1,unit='')=>{if(!before||!Number.isFinite(before[key])||!Number.isFinite(m[key]))return '';const v=Number(fmt((m[key]-before[key])*multiplier,1));return `${v>0?'+':''}${fmt(v,1)} ${unit} from baseline`;};
   box.replaceChildren(
@@ -69,6 +77,7 @@ function renderTeaching(){
   if(!baseline||!lastResults)return;
   if(comparisonConfig!==baselineConfig||JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
   if(!comparisonFresh||!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
+  if(isAirflow()){renderAirflowTeaching();return;}
   const adjustment=explainAdjustment(baseline[0].settings,lastResults[0].settings);
   if(!predictionPending)$('prediction-feedback').textContent=adjustment.changed+(adjustment.control.startsWith('Multiple')?' Multiple controls changed; isolate one change to explain its effect.':'');
   $('baseline-status').textContent='Comparing the recorded baseline with the last completed simulation.';
@@ -81,14 +90,14 @@ function renderTeaching(){
   });
 }
 function updateLesson(){
-  const lesson=LESSONS[$('lesson').value];
+  const lesson=currentLesson();
   $('lesson-instruction').textContent=lesson.instruction;
-  $('lesson-objective').textContent=lesson.objective;
+  $('lesson-objective').textContent=lesson.objective||lesson.instruction;
   updateQuestion();
   $('lesson-reflection').textContent=lesson.reflection;
 }
 function updateQuestion(){
-  const q=predictionQuestion($('lesson').value,$('learner-level').value);$('lesson-prediction').textContent=q.prompt;
+  const q=currentQuestion();$('lesson-prediction').textContent=q.prompt;
   const names=q.betweenPatients?{up:'Higher in B',same:'Similar',down:'Lower in B'}:{up:'Increase',same:'Little change',down:'Decrease'};
   for(const b of document.querySelectorAll('[data-prediction]')){b.textContent=names[b.dataset.prediction];b.setAttribute('aria-pressed',String(b.dataset.prediction===prediction));}
   $('lesson-objective').textContent=q.focus;
@@ -101,7 +110,7 @@ $('learner-level').addEventListener('change',()=>{for(const b of document.queryS
 function setLessonBaseline(){
   pausePlayback();scenarioEpoch++;prediction=null;predictionPending=null;$('prediction-feedback').textContent='';
   for(const b of document.querySelectorAll('[data-prediction]'))b.disabled=false;
-  const lesson=LESSONS[$('lesson').value];
+  const lesson=currentLesson();
   for(const [key,value] of Object.entries(lesson.baseline))$(key).value=value;
   for(const [i,k] of ['a','b'].entries()){$('kind-'+k).value=lesson.kinds[i];$('seed-'+k).value=13791;}
   $('guided-mode').checked=true;updateLesson();$('apply-adjustment').disabled=true;
@@ -113,9 +122,10 @@ $('apply-adjustment').addEventListener('click',()=>{
   if(!baseline||JSON.stringify(config())!==baselineConfig){setLessonBaseline();return;}
   $('guided-mode').checked=true;
   for(const key of ['peep','vt','rr'])$(key).value=baseline[0].settings[key];
-  for(const [key,value] of Object.entries(LESSONS[$('lesson').value].adjustment))$(key).value=value;
+  if(isAirflow())$('resistance').value=baseline[0].airflow.params.R0*1000;
+  for(const [key,value] of Object.entries(currentLesson().adjustment))$(key).value=value;
   $('prediction-feedback').textContent=prediction?'Testing your prediction…':'Applying the change…';
-  predictionPending={question:predictionQuestion($('lesson').value,$('learner-level').value),prediction,before:baseline,lesson:$('lesson').value,level:$('learner-level').value,key:`${scenarioEpoch}/${$('lesson').value}/${$('learner-level').value}`};
+  predictionPending={question:currentQuestion(),prediction,before:baseline,lesson:$('lesson').value,level:$('learner-level').value,key:`${$('mechanics-mode').value}/${scenarioEpoch}/${$('lesson').value}/${$('learner-level').value}`};
   for(const b of document.querySelectorAll('[data-prediction]'))b.disabled=true;
   wantPlayback=!reducedMotion.matches;invalidateSweep();clearTimeout(timer);compare(true);predictionPending.id=compareId;
 });
@@ -138,13 +148,14 @@ function drawMap(k,result,frame){
     const pos=geo.points[i],x=cx+pos.side*(rx+gap)+pos.dx*scale,y=cy+pos.dy*scale;
     const f=frame?frame.unitOpen[i]:phase==='ei'?u.openEI:u.openEE;
     const atEI=frame?frame===ei:phase==='ei',high=atEI&&u.strainEI>1.65&&f>.2;
-    const cyclic=f-u.openEE>.08&&f>.15;
+    const flowMode=result.trajectory?.kind==='frozen-aeration-airflow',cyclic=!flowMode&&f-u.openEE>.08&&f>.15;
     const state=high?'over':f>.35?'open':'closed';
     const v=frame?frame.unitVolume[i]:phase==='ei'?u.volumeEI:u.volumeEE;
     const radius=Math.max(1.15,Math.sqrt(Math.max(0,v)*12/Math.PI));
     ctx.globalAlpha=state==='closed'?.75:.4+.6*f;ctx.fillStyle=colors[state];ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);ctx.fill();
     if(cyclic){ctx.globalAlpha=1;ctx.strokeStyle=colors.cyclic;ctx.lineWidth=1;ctx.stroke();}
     if(high){ctx.globalAlpha=Math.max(.2,f);ctx.strokeStyle=colors.over;ctx.lineWidth=1.2;ctx.strokeRect(x-radius-1,y-radius-1,2*radius+2,2*radius+2);}
+    if(flowMode&&u.active&&u.volumeEI-u.relaxedVolume>1e-9&&v-u.relaxedVolume>.1*(u.volumeEI-u.relaxedVolume)){ctx.globalAlpha=.8;ctx.strokeStyle='#798ec5';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(x,y,radius+1.2,0,2*Math.PI);ctx.stroke();}
     positions[k].push({x,y,u,state});
   });ctx.globalAlpha=1;
   const name=frame&&result.trajectory?frameLabel(frame,currentFrameIndex,result.trajectory):phase==='ei'?'end inspiration':'before inspiration';
@@ -154,6 +165,7 @@ function updateUnitDetail(k,result){
   const id=selectedUnits[k],u=id===null?null:result?.units.find(unit=>unit.id===id);
   const current=currentFrames[k==='a'?0:1];
   const text=u?`Unit ${u.id}: open ${pct(u.openEE)} before inspiration / ${pct(u.openEI)} at end inspiration. Fully open volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`:'Select a lung unit on the map or enter its number to inspect the current result.';
+  if(u&&result.trajectory?.kind==='frozen-aeration-airflow'){const i=result.units.indexOf(u),q=current?.unitFlow?.[i],node=current?current.pressure-result.airflow.params.R0*current.flow:null,palv=Number.isFinite(node)&&u.active?node-u.resistance*q:null;const detail=`Region ${u.id}: flow ${fmt(q,2)} mL/s (+ in, − out); intrinsic RC ${Number.isFinite(u.tauLocal)&&u.tauLocal<.001?'<0.001':fmt(u.tauLocal,3)} s; excess gas emptied ${Number.isFinite(u.fractionEmptied)?pct(u.fractionEmptied):'--'}; alveolar pressure ${fmt(palv,1)} cmH2O. RC excludes shared resistance and chest wall.${Number.isFinite(u.fractionEmptied)&&(u.fractionEmptied>1||u.fractionEmptied<0)?' The regional fraction can exceed its relaxed reference through redistribution.':''}`;$('unit-'+k).textContent=detail;return;}
   const display=u&&current?text+` Selected phase: open ${pct(current.unitOpen[u.id])}, gas volume ${fmt(current.unitVolume[u.id],2)} mL.`:text;
   if($('unit-'+k).textContent!==display)$('unit-'+k).textContent=display;
 }
@@ -214,16 +226,19 @@ function drawSweep(){
   });
   svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending distension proxy; faint dotted lines show descending aeration. Patient A green, Patient B blue. Outlined markers indicate inspiratory pressure-ceiling exposure.');
 }
-function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i],currentFrames[i]);updateUnitDetail(k,lastResults[i]);});drawPV();renderFrame();}drawSweep();}
+function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i],currentFrames[i]);updateUnitDetail(k,lastResults[i]);});drawPV();drawFlow();renderFrame();}drawSweep();}
 worker.onmessage=({data})=>{
-  if(data.type==='compare'){
-    if(data.id!==compareId||compareContext?.id!==data.id)return;
+  if(data.type==='compare'||data.type==='airflow'){
+    if(data.id!==compareId||compareContext?.id!==data.id||compareContext.mode!==$('mechanics-mode').value)return;
     if(JSON.stringify(data.config)!==compareContext.config||compareContext.config!==JSON.stringify(config())||JSON.stringify(compareContext.settings)!==JSON.stringify(settings()))return;
-    acceptedStateToken=data.stateToken;acceptedConfig=compareContext.config;worker.postMessage({id:data.stateToken,type:'accept-state'});
+    if(isAirflow()&&JSON.stringify(compareContext.params)!==JSON.stringify(flowParams()))return;
+    if(data.type==='compare'){acceptedStateToken=data.stateToken;acceptedConfig=compareContext.config;worker.postMessage({id:data.stateToken,type:'accept-state'});}
+    if(compareContext.prepareAirflow){const capture=compareContext.recordBaseline;compare(false,capture);return;}
+    if(data.type==='airflow')for(const result of data.results)for(const frame of result.trajectory.frames)frame.unitOpen=result.trajectory.frozenOpen;
     lastResults=data.results;window.ardsResults=lastResults;comparisonFresh=compareContext.fresh;replayTime=0;currentFrameIndex=0;currentFrames=lastResults.map(r=>r.trajectory?.frames[0]);
     for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');
-    $('status').textContent=`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
-    if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value){baseline=lastResults.map(({trajectory,...summary})=>structuredClone(summary));baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent='Baseline ready. Predict, then apply the change.';$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
+    $('status').textContent=data.type==='airflow'?`Frozen aeration · ${lastResults[0].breaths}/${lastResults[1].breaths} settling breaths · ${lastResults.every(r=>r.metrics.converged)?'near-periodic cycle':'periodicity criterion not reached'}.`:`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
+    if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value&&baselineExpected.mode===$('mechanics-mode').value){baseline=lastResults.map(({trajectory,...summary})=>structuredClone(summary));baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent='Baseline ready. Predict, then apply the change.';$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
     if(predictionPending?.id===data.id&&predictionPending.lesson===$('lesson').value&&predictionPending.level===$('learner-level').value){
       const answer=evaluatePrediction(predictionPending.question,predictionPending.before,lastResults,predictionPending.prediction);
       if(answer.correct!==null&&!scoredQuestions.has(predictionPending.key)){scoredQuestions.add(predictionPending.key);attempts++;if(answer.correct)correctAttempts++;}
@@ -241,14 +256,16 @@ worker.onmessage=({data})=>{
     for(const r of deviceResults.rows){const row=document.createElement('tr');for(const v of [r.units,fmt(r.medianMs,1)+' ms',fmt(r.p95Ms,1)+' ms',fmt(r.realTimeFactor,1)+'x']){const td=document.createElement('td');td.textContent=v;row.append(td);}$('benchmark-rows').append(row);}
     $('benchmark-status').textContent=`Completed ${new Date(deviceResults.date).toLocaleString()}. Seven timed runs per size; engine only.`;$('run-benchmark').disabled=false;$('export-benchmark').disabled=false;
   }else if(data.type==='error'){
-    const currentId=data.requestType==='benchmark'?benchmarkId:data.requestType==='sweep'?sweepId:data.requestType==='compare'?compareId:null;if(data.id!==currentId)return;
-    if(data.requestType==='compare'){pendingBaseline=false;$('apply-adjustment').disabled=true;for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');}
+    const currentId=data.requestType==='benchmark'?benchmarkId:data.requestType==='sweep'?sweepId:(data.requestType==='compare'||data.requestType==='airflow')?compareId:null;if(data.id!==currentId)return;
+    if(data.requestType==='airflow'){predictionPending=null;lastResults=null;currentFrames=[];$('play-breath').disabled=true;$('breath-frame').disabled=true;for(const k of ['a','b']){$('metrics-'+k).replaceChildren();$('live-'+k).textContent='No valid airflow result for these settings.';const c=$('map-'+k);c.getContext('2d').clearRect(0,0,c.width,c.height);}}
+    if(data.requestType==='compare'||data.requestType==='airflow'){pendingBaseline=false;$('apply-adjustment').disabled=true;for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');}
     const target=data.requestType==='benchmark'?'benchmark-status':'status';$(target).textContent='Simulation error: '+data.message;$(target).setAttribute('role','alert');if(data.requestType==='sweep'){$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';}if(data.requestType==='benchmark')$('run-benchmark').disabled=false;
   }
 };
 worker.onerror=event=>{$('status').textContent='The simulation could not load: '+event.message;$('status').setAttribute('role','alert');};
 function invalidateSweep(){lastSweep=null;sweepId=0;window.ardsSweep=null;$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';$('sweep-caption').textContent='Run a fresh standardized sweep for these settings.';drawSweep();}
 for(const k of ['peep','vt','rr'])$(k).addEventListener('input',()=>{if(k!=='peep')invalidateSweep();labels();schedule();});
+$('resistance').addEventListener('input',()=>{labels();schedule();});
 $('pbw').addEventListener('input',()=>{invalidateSweep();labels();schedule(true,true);});
 for(const k of ['a','b'])for(const type of ['kind','seed'])$(type+'-'+k).addEventListener('change',()=>{
   const seed=$('seed-'+k);if(!Number.isFinite(Number(seed.value))||Number(seed.value)<0||Number(seed.value)>4294967295)seed.value=k==='a'?13791:14602;
@@ -262,6 +279,7 @@ $('reset').addEventListener('click',()=>{invalidateComparison();clearTimeout(tim
 $('new-seeds').addEventListener('click',()=>{const seeds=new Uint32Array(2);crypto.getRandomValues(seeds);invalidateComparison(true);$('seed-a').value=seeds[0];$('seed-b').value=seeds[1];invalidateSweep();compare(true);});
 $('share').addEventListener('click',async()=>{
   const url=new URL(location.href);url.search='';for(const k of ['peep','vt','rr','pbw','kind-a','kind-b','seed-a','seed-b'])url.searchParams.set(k,$(k).value);
+  if(isAirflow()){url.searchParams.set('mode','airflow');url.searchParams.set('resistance',$('resistance').value);}
   try{await navigator.clipboard.writeText(url.href);$('status').textContent='Scenario link copied. It recreates the seeds and settings from fresh state; pressure history is not included.';}
   catch{window.prompt('Copy this scenario link. It starts from fresh state.',url.href);}
 });
@@ -293,13 +311,16 @@ function renderFrame(announce=false){
     'Before inspiration':'Grey regions contribute less to the breath. Watch whether they open as pressure rises.',
     'Inspiration':'Open regions fill with gas. Orange rings appear where more tissue opens during the breath.',
     'End inspiration':'Compare the recruited areas with the red squares: more lung can open while other regions overstretch.',
+    'Start expiration':'Airway pressure returns to PEEP, but regional gas volume is continuous and begins to empty through resistance.',
     'Pressure release':'Gas volume drops immediately as pressure returns to PEEP; this model has no airway resistance.',
     'Expiration':'PEEP is the pressure left between breaths. Watch which regions stay open and which lose aeration.',
     'End expiration':'This is the end of the recorded breath. Compare with the start; ten breaths need not be steady state.'
   };
   $('phase-story').textContent=reducedMotion.matches?'Motion is reduced. Use the phase buttons or scrubber to inspect the computed breath.':phasePrompts[label]||phasePrompts.Inspiration;
+  if(trajectory.kind==='frozen-aeration-airflow'&&!reducedMotion.matches){const messages={'Before inspiration':'This is gas remaining from the preceding cycle. Aeration is held fixed.','Inspiration':'Flow fills the fixed open regions. Airway pressure includes the resistive load.','End inspiration':'Flow is still entering at this snapshot. The displayed peak pressure is not a measured plateau.','Start expiration':'Pressure returns to PEEP, while gas volume remains continuous and flow turns outward.','Expiration':'Gas leaves through resistance. Watch the expiratory flow approach zero.','End expiration':'Compare remaining gas and end-expiratory flow before the next breath begins.'};$('phase-story').textContent=messages[name]||messages.Inspiration;}
   if(currentFrames.some(f=>f?.ceilingActive))$('phase-story').textContent='The pressure ceiling constrains this part of inspiration. Compare delivered with requested volume.';
-  lastResults.forEach((r,i)=>{const frame=currentFrames[i];if(!frame)return;const k=i?'b':'a';drawMap(k,r,frame);$('live-'+k).textContent=$('lesson').value==='wall'||$('learner-level').value!=='student'?`${fmt(frame.volume/1000,2)} L · ${pct(frame.open)} open · Paw ${fmt(frame.pressure,1)} − Ppl ${fmt(frame.meanPleural,1)} = PL ${fmt(frame.pressure-frame.meanPleural,1)} cmH2O`:`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · ${pct(frame.open)} open`;if(!playing)updateUnitDetail(k,r);});
+  lastResults.forEach((r,i)=>{const frame=currentFrames[i];if(!frame)return;const k=i?'b':'a';drawMap(k,r,frame);$('live-'+k).textContent=r.trajectory.kind==='frozen-aeration-airflow'?`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · Flow ${fmt(frame.flow/1000,2)} L/s`:$('lesson').value==='wall'||$('learner-level').value!=='student'?`${fmt(frame.volume/1000,2)} L · ${pct(frame.open)} open · Paw ${fmt(frame.pressure,1)} − Ppl ${fmt(frame.meanPleural,1)} = PL ${fmt(frame.pressure-frame.meanPleural,1)} cmH2O`:`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · ${pct(frame.open)} open`;$('unit-'+k).setAttribute('aria-live',playing?'off':'polite');if(!playing||(r.trajectory.kind==='frozen-aeration-airflow'&&selectedUnits[k]!==null))updateUnitDetail(k,r);});
+  if(isAirflow()&&window.ardsFlowScales){const scales=window.ardsFlowScales;document.querySelectorAll('#flow-chart .breath-cursor').forEach(e=>e.remove());currentFrames.forEach((frame,i)=>$('flow-chart').append(svgEl('circle',{class:'breath-cursor',cx:scales.x(replayTime),cy:scales.y(frame.flow/1000),r:4,fill:i?colors.b:colors.a})));}
   if(announce)$('breath-announce').textContent=$('breath-phase').textContent;
   if(window.ardsPVScales){const scales=window.ardsPVScales;document.querySelectorAll('#pv-chart .breath-cursor').forEach(e=>e.remove());currentFrames.forEach((frame,i)=>{if(frame)$('pv-chart').append(svgEl('circle',{class:'breath-cursor',cx:scales.x(frame.volume/1000),cy:scales.y(frame.pressure),r:4,fill:i?colors.b:colors.a,stroke:'#fff','stroke-width':1}));});}
 }
@@ -330,9 +351,44 @@ const dockObserver=new ResizeObserver(()=>{
   document.documentElement.style.setProperty('--control-dock-height',`${document.querySelector('.control-dock').getBoundingClientRect().height}px`);
   document.documentElement.style.setProperty('--breath-panel-height',`${document.querySelector('.breath-panel').getBoundingClientRect().height}px`);
 });dockObserver.observe(document.querySelector('.control-dock'));dockObserver.observe(document.querySelector('.breath-panel'));
+function updateModeViews(){
+  $('resistance-control').hidden=!isAirflow();$('mode-context').hidden=!isAirflow();$('flow-panel').hidden=!isAirflow();$('sweep-panel').hidden=isAirflow();
+  $('guided-mode').disabled=isAirflow();$('release-breath').textContent=isAirflow()?'Exp start':'Release';
+  document.querySelector('.legend').innerHTML=isAirflow()?'<span><i class="closed"></i>Less aerated (fixed)</span><span><i class="open"></i>Aerated (fixed)</span><span><i class="retained-gas"></i>Gas above relaxed volume</span>':recruitmentLegend;
+  $('map-help').innerHTML=isAirflow()?'<summary>What does airflow mode show?</summary><div class="meaning-grid"><p>Aeration is held fixed while gas moves through linear airway resistances. Dot area follows actual model gas volume; the blue outline marks more than 10% of that region’s end-inspiratory excess still present (a display threshold).</p><p>Intrinsic regional RC is an isolated estimate. Shared central resistance and the chest wall couple the regions, so actual emptying need not follow that local time constant.</p><p>The emptying fraction uses excess gas above the relaxed frozen PEEP reference. It is different from the exhaled/inspired tidal-volume ratio. Equilibration pressures are hypothetical estimates, not measured plateau or clinical auto-PEEP.</p></div>':recruitmentHelp;
+  $('pv-caption').textContent=isAirflow()?'Airway pressure includes resistance. At expiration onset, pressure changes while gas volume remains continuous; the volume then falls as air flows out.':'Watch the cursor move with the breath. A steeper path means more pressure is needed to add volume. Dashed release is instantaneous in this model.';
+}
+$('mechanics-mode').addEventListener('change',()=>{
+  pausePlayback();invalidateComparison(true);lastResults=null;currentFrames=[];$('play-breath').disabled=true;$('breath-frame').disabled=true;
+  for(const k of ['a','b']){$('metrics-'+k).replaceChildren();$('live-'+k).textContent='Preparing experiment…';const c=$('map-'+k);c.getContext('2d').clearRect(0,0,c.width,c.height);}
+  if(isAirflow()){recruitmentLesson=$('lesson').value;$('lesson').innerHTML='<option value="flow-resistance">Resistance: pressure cost and emptying</option><option value="flow-rate">Rate: shorter expiration</option>';}else{$('lesson').innerHTML=recruitmentOptions;$('lesson').value=recruitmentLesson;}
+  updateModeViews();setLessonBaseline();
+});
+function updateAirflowMetrics(k,result){
+  const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(metric('Delivered / requested',`${fmt(m.vtDelivered)} / ${fmt(result.targetVT)}`,'mL',false,'delivery'),metric('Peak airway pressure',fmt(m.ppeak,1),'cmH2O',false,'ppeak'),metric('Excess gas emptied',pct(m.fractionEmptied),'',true,'fractionEmptied'),metric('Excess gas retained',fmt(m.retainedVolume,1),'mL',true,'retainedVolume'));
+  const patient=$('patient-'+k);let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');patient.append(help);}help.textContent='';
+  let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';advanced.innerHTML='<summary>Additional model measures</summary><div class="metrics"></div>';patient.append(advanced);}
+  advanced.querySelector('.metrics').replaceChildren(metric('Equivalent RC estimate',fmt(m.tauEquivalent,3),'s',false,'tauEquivalent'),metric('Frozen chord compliance',fmt(m.complianceInput,1),'mL/cmH2O',false,'complianceInput'),metric('Hypothetical end-hold pressure',fmt(m.virtualEndHoldPressure,1),'cmH2O',false,'virtualEndHoldPressure'),metric('Hypothetical excess PEEP',fmt(m.virtualAutoPeep,1),'cmH2O',false,'virtualAutoPeep'));
+  let pressure=patient.querySelector('.pressure-summary');if(!pressure){pressure=document.createElement('p');pressure.className='pressure-summary';advanced.append(pressure);}pressure.textContent=`Periodicity residual ${fmt(m.periodicResidual,3)} mL. ${m.converged?'Convergence criterion reached.':'Settling cap reached; this trial is not near periodic.'} Chord-range excursions: ${pct(m.extrapolatedWeight)} of tissue weight; maximum ${pct(result.airflow.chordExcursion.maxRelative)} of that region’s reference breath-volume increment. This linear approximation is not calibrated outside its reference chord.`;
+  $('delivery-'+k).textContent=m.limited?'Pressure-limited model: flow falls to hold the pressure ceiling; check delivered volume.':'';
+}
+function renderAirflowTeaching(){
+  const pieces=[];for(const key of ['peep','vt','rr'])if(baseline[0].settings[key]!==lastResults[0].settings[key])pieces.push(`${key.toUpperCase()} ${baseline[0].settings[key]} → ${lastResults[0].settings[key]}`);
+  if(baseline[0].airflow.params.R0!==lastResults[0].airflow.params.R0)pieces.push(`central resistance ${baseline[0].airflow.params.R0*1000} → ${lastResults[0].airflow.params.R0*1000} cmH2O·s/L`);
+  if(!predictionPending)$('prediction-feedback').textContent=pieces.length?pieces.join('; ')+(pieces.length>1?'. Multiple controls changed.':'.'):'No setting change from the airflow baseline.';
+  $('adjustment-explanation').textContent='Aeration is fixed. Resistance and the available expiratory time determine gas movement through this coupled network.';
+  lastResults.forEach((r,i)=>{const article=document.createElement('article'),h=document.createElement('h3'),p=document.createElement('p');h.textContent='Patient '+(i?'B':'A');p.textContent=`Peak airway pressure ${fmt(baseline[i].metrics.ppeak,1)} → ${fmt(r.metrics.ppeak,1)} cmH2O; retained excess gas ${fmt(baseline[i].metrics.retainedVolume,1)} → ${fmt(r.metrics.retainedVolume,1)} mL; fraction of excess gas emptied ${pct(baseline[i].metrics.fractionEmptied)} → ${pct(r.metrics.fractionEmptied)}. Local RC estimates exclude the shared central resistance and chest wall.`;article.append(h,p);$('comparison-explanation').append(article);});
+}
+function drawFlow(){
+  if(!isAirflow()||!lastResults?.[0].trajectory)return;
+  const all=lastResults.flatMap(r=>r.trajectory.frames.map(f=>f.flow/1000)),lo=Math.min(-.2,...all),hi=Math.max(.2,...all),s=baseChart($('flow-chart'),[0,lastResults[0].trajectory.cycle],[lo,hi],'Time (s)','Flow (L/s)');window.ardsFlowScales=s;
+  lastResults.forEach((r,i)=>line($('flow-chart'),r.trajectory.frames.map(f=>({x:f.time,y:f.flow/1000})),s,i?colors.b:colors.a));
+}
+updateModeViews();
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
 for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
+if(params.get('mode')==='airflow'){$('mechanics-mode').value='airflow';$('lesson').innerHTML='<option value="flow-resistance">Resistance: pressure cost and emptying</option><option value="flow-rate">Rate: shorter expiration</option>';const r=Number(params.get('resistance'));if(r>=2&&r<=30)$('resistance').value=r;updateModeViews();}
 labels();drawSweep();if(params.size){updateLesson();$('baseline-status').textContent='Custom scenario loaded. Set the lesson baseline to begin its guided comparison.';compare(true);}else setLessonBaseline();
 
 const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');

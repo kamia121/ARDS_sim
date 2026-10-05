@@ -1,3 +1,4 @@
+import {simulateAirflow,AIRFLOW_INFO} from './airflow.js';
 import {createPatient,simulate,MODEL_INFO} from './engine.js';
 
 /** Retained-state compare session: one accepted state plus at most one tentative candidate. */
@@ -25,6 +26,15 @@ export function createSession(){
     return {id,type:'compare',config:structuredClone(config),results,modelInfo:MODEL_INFO,stateToken:id};
   }
 
+  function airflow(data){
+    const {id,config,settings,params,baseStateToken}=data;
+    if(!Number.isFinite(id)||id<=lastId)throw new RangeError('Airflow id must increase');
+    if(!accepted||baseStateToken!==accepted.token)throw new Error('Airflow requires the current acknowledged recruitment reference');
+    const key=JSON.stringify(config);if(key!==accepted.key)throw new Error('Airflow configuration differs from its frozen reference; prepare fresh lungs');
+    lastId=id;candidate=null;
+    const results=accepted.patients.map(p=>({...simulateAirflow(structuredClone(p),settings,{params,recordTrajectory:true}),phenotype:p.kind,seed:p.seed}));
+    return {id,type:'airflow',config:structuredClone(config),results,modelInfo:AIRFLOW_INFO,baseStateToken:accepted.token};
+  }
   function acceptState({id}){
     if(candidate&&candidate.token===id){accepted=candidate;candidate=null;return {id,type:'state-accepted',stateToken:accepted.token};}
     return {id,type:'state-ignored',stateToken:accepted?accepted.token:null};
@@ -32,6 +42,7 @@ export function createSession(){
 
   return {handle(data){
     if(data?.type==='compare')return compare(data);
+    if(data?.type==='airflow')return airflow(data);
     if(data?.type==='accept-state')return acceptState(data);
     throw new TypeError(`Unsupported session message type: ${data?.type}`);
   }};

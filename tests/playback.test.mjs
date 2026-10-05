@@ -51,3 +51,11 @@ test('interpolated states are labeled by phase rather than mistaken for exact bo
  assert.equal(frameLabel(first.frame,first.index,t),'Inspiration');
  assert.equal(frameLabel(release.frame,release.index,t),'Expiration');
 });
+
+test('airflow inlet and outlet discontinuities preserve volume and are not interpolated as volume jumps',()=>{
+ const t=tr();t.kind='frozen-aeration-airflow';t.frames.splice(1,0,{...t.frames[0],phase:'inspiration',pressure:15});t.eiIndex++;t.releaseIndex++;
+ t.frames[t.releaseIndex]={...t.frames[t.releaseIndex],volume:t.frames[t.eiIndex].volume,unitVolume:t.frames[t.eiIndex].unitVolume};
+ const afterStart=sampleTrajectory(t,1e-9);assert.ok(afterStart.frame.pressure>14.99);
+ assert.equal(frameLabel(t.frames[t.releaseIndex],t.releaseIndex,t),'Start expiration');
+ const afterRelease=sampleTrajectory(t,1+1e-9);assert.ok(afterRelease.frame.volume>399.99);assert.equal(afterRelease.frame.pressure,5);
+});

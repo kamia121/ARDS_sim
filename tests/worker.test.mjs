@@ -132,3 +132,12 @@ test('a new worker session rejects prior tokens and requires a fresh reset',()=>
  const restarted=createSession();assert.throws(()=>restarted.handle(cmp(2,B,{baseStateToken:1})),/No accepted state/);
  assert.deepEqual(restarted.handle(cmp(3,B,{reset:true})).results,direct(fresh(),B));
 });
+
+test('airflow trials require acknowledged references and do not advance recruitment history',()=>{
+ const session=createSession(),reference=fresh();session.handle(cmp(1,A,{reset:true}));session.handle(ack(1));direct(reference,A);
+ assert.throws(()=>session.handle({id:2,type:'airflow',config,settings:A,baseStateToken:99}),/acknowledged/);
+ const trial=session.handle({id:3,type:'airflow',config,settings:A,params:{R0:.016,Rp:.004},baseStateToken:1});
+ assert.equal(trial.type,'airflow');assert.equal(trial.baseStateToken,1);assert.equal(trial.results[0].trajectory.kind,'frozen-aeration-airflow');
+ assert.equal(session.handle(ack(3)).type,'state-ignored');
+ assert.deepEqual(session.handle(cmp(4,B,{baseStateToken:1})).results,direct(reference,B));
+});

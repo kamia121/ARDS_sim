@@ -56,7 +56,7 @@ export function frameLabel(frame,index,trajectory){
   const i=Number.isInteger(index)?index:f.indexOf(frame);
   if(frame!==f[i])return frame.phase==='inspiration'?'Inspiration':'Expiration';
   if(i===trajectory.eiIndex)return 'End inspiration';
-  if(i===trajectory.releaseIndex)return 'Pressure release';
+  if(i===trajectory.releaseIndex)return trajectory.kind==='frozen-aeration-airflow'?'Start expiration':'Pressure release';
   if(i===f.length-1)return 'End expiration';
   if(i===0)return 'Before inspiration';
   return i<trajectory.eiIndex?'Inspiration':'Expiration';

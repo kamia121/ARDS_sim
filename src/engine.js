@@ -222,3 +222,23 @@ export function sweep(patient, settings = {}, { peeps = [4, 6, 8, 10, 12, 14, 16
   const ascending = ascendingPeeps.map(run), descending = [...ascendingPeeps].reverse().map(run);
   return { ascending, descending, breathsPerStep: breaths, dt, initialStateSource: initialState === 'fresh' ? 'Fresh seeded patient; sequential ascending then descending path' : 'Clone of supplied current state; sequential ascending then descending path' };
 }
+
+/**
+ * Readonly dt=0 reference solve with the accepted recruitment fraction f frozen: relaxed PEEP state (EE) and
+ * the state at requested EE+VT inside the dt=0 pressure ceiling (EI). Never commits to or mutates the patient.
+ */
+export function frozenReference(patient, settings = {}) {
+  if (patient == null || !Array.isArray(patient.units) || patient.units.length === 0) throw new TypeError('frozenReference requires a patient with units');
+  const s = validateSettings(settings), targetVT = s.vt * patient.pbw;
+  const guess = s.peep - patient.baselinePleural;
+  const describe = e => ({ z: e.z, volume: e.volume, pressure: e.pressure, units: patient.units.map(u => { const tp = e.z - patient.pleuralGradient * u.dep; return { f: u.f, v: u.f * regionalVolume(u, tp), tp }; }) });
+  const ee = solve(patient, s.peep, 0, 'pressure', guess);
+  const ceiling = solve(patient, s.pressureLimit, 0, 'pressure', ee.z);
+  const limited = ee.volume + targetVT > ceiling.volume + 1e-5;
+  const ei = limited ? ceiling : solve(patient, ee.volume + targetVT, 0, 'volume', ee.z);
+  const deltaZ = ei.z - ee.z;
+  if (!(deltaZ > 0) || !(ei.volume - ee.volume > 1e-9)) throw new RangeError('Frozen reference has no available volume between PEEP and the requested end-inspiratory state (zero deltaZ or delta volume)');
+  let depMean = 0;
+  for (const u of patient.units) depMean += u.weight * u.dep;
+  return { settings: s, ee: describe(ee), ei: describe(ei), deltaZ, targetVT, limited, depMean };
+}

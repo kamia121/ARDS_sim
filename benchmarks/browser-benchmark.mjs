@@ -45,7 +45,7 @@ try{
   const device=await page.evaluate(()=>window.ardsBenchmark);
   await page.locator('#tab-model').click();
   assert.equal(await page.locator('a[href^="./docs/"], a[href^="./benchmarks/"]').count(),0);
-  assert.match(await page.locator('#model').textContent(),/Equations and output definitions/);
+  assert.match(await page.locator('#model').textContent(),/[Ee]quations and output definitions/);
   assert.deepEqual(errors,[]);
   const sorted=[...timings].sort((a,b)=>a-b);
   const result={date:new Date().toISOString(),provenance:{checkpoint:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),scriptSha256:createHash('sha256').update(await fs.readFile('benchmarks/browser-benchmark.mjs')).digest('hex'),sourceSha256:Object.fromEntries(await Promise.all(['src/app.js','src/playback.js','src/worker.js','src/session.js','src/engine.js','src/teaching.js','index.html','styles.css'].map(async file=>[file,createHash('sha256').update(await fs.readFile(file)).digest('hex')]))),workingTree:'integration changes present at run'},browser:browser.version(),scope:`Headless Chromium on ${process.platform} / ${process.arch}; desktop/mobile layout emulation, not a physical mobile benchmark. Paired worker-plus-DOM reset timings include creation, simulation and DOM/canvas updates, but do not isolate compositor presentation.`,checks:['reproducible reset','phase toggle','fresh isolated 22-step sweep','stale sweep invalidation','phenotype change','320/390/1280 layout without overflow','module worker and device benchmark','in-app equations and no unpublished artifact links','no page errors or failed requests'],layout,pairedUpdate:{samplesMs:timings,medianMs:sorted[3],p95Ms:sorted[6]},device};
