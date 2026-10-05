@@ -129,14 +129,37 @@ function validateSettings(settings) {
   return s;
 }
 
-export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1 } = {}) {
+export const MAX_TRAJECTORY_VALUES = 250000;
+
+export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1, recordTrajectory = false } = {}) {
   const s = validateSettings(settings);
   if (!Number.isInteger(breaths) || breaths < 1 || breaths > 1000 || !(dt > 0 && dt <= 1)) throw new RangeError('breaths must be 1..1000 and dt 0..1 s');
+  if (typeof recordTrajectory !== 'boolean') throw new TypeError('recordTrajectory must be a boolean');
   const cycle = 60 / s.rr, ti = cycle / 3, te = cycle - ti, targetVT = s.vt * patient.pbw;
+  if (recordTrajectory) {
+    const frameCount = Math.ceil(ti / dt) + Math.ceil(te / dt) + 2;
+    if (frameCount * patient.units.length > MAX_TRAJECTORY_VALUES) throw new RangeError(`Trajectory recording needs ${frameCount} frames x ${patient.units.length} units, exceeding the ${MAX_TRAJECTORY_VALUES} limit`);
+  }
+  let trajDep = 0;
+  if (recordTrajectory) for (const u of patient.units) trajDep += u.weight * u.dep;
+  let frames = null;
+  const addFrame = (time, phase, pressure, volume, z, ceilingActive) => {
+    const n = patient.units.length, unitOpen = new Float64Array(n), unitVolume = new Float64Array(n);
+    let open = 0;
+    for (let i = 0; i < n; i++) {
+      const u = patient.units[i];
+      unitOpen[i] = u.f; unitVolume[i] = u.f * regionalVolume(u, z - patient.pleuralGradient * u.dep); open += u.weight * u.f;
+    }
+    const meanPleural = patient.baselinePleural + patient.pleuralGradient * trajDep + patient.chestWallElastance * (volume - patient.chestWallReferenceVolume);
+    frames.push({ time, phase, pressure, volume, meanPleural, open, ceilingActive, unitOpen, unitVolume });
+  };
   let ee, ei, eeState, eiState, limited = false, pv = [], maxPressure = s.peep, finalEffectiveTarget = 0, finalMode = 'volume';
   let zGuess = s.peep - patient.baselinePleural;
   for (let b = 0; b < breaths; b++) {
+    const record = recordTrajectory && b === breaths - 1;
+    if (record) frames = [];
     ee = advancePressure(patient, s.peep, 0, zGuess); eeState = snapshot(patient, ee);
+    if (record) addFrame(0, 'start', s.peep, ee.volume, ee.z, false);
     const baseVolume = ee.volume;
     pv = [{ volume: ee.volume, pressure: s.peep, phase: 'inflation' }];
     limited = false; maxPressure = s.peep;
@@ -145,7 +168,8 @@ export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1 } = {}
       const target = baseVolume + targetVT * j / ni;
       const ceiling = solve(patient, s.pressureLimit, stepI, 'pressure', zGuess);
       let e;
-      if (target > ceiling.volume + 1e-5) { e = ceiling; limited = true; finalMode = 'pressure'; }
+      const ceilingActive = target > ceiling.volume + 1e-5;
+      if (ceilingActive) { e = ceiling; limited = true; finalMode = 'pressure'; }
       else {
         e = solve(patient, target, stepI, 'volume', zGuess); finalMode = 'volume';
         if (e.pressure < s.peep) { e = solve(patient, s.peep, stepI, 'pressure', zGuess); finalMode = 'pressure'; }
@@ -155,12 +179,18 @@ export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1 } = {}
       zGuess = e.z; ei = e;
       maxPressure = Math.max(maxPressure, e.pressure);
       pv.push({ volume: e.volume, pressure: e.pressure, phase: 'inflation' });
+      if (record) addFrame(j === ni ? ti : j * stepI, 'inspiration', e.pressure, e.volume, e.z, ceilingActive);
     }
     eiState = snapshot(patient, ei);
+    if (record) {
+      const release = solve(patient, s.peep, 0, 'pressure', ei.z);
+      addFrame(ti, 'release', s.peep, release.volume, release.z, false);
+    }
     const ne = Math.ceil(te / dt), stepE = te / ne;
     for (let j = 0; j < ne; j++) {
       const e = advancePressure(patient, s.peep, stepE, zGuess); zGuess = e.z;
       pv.push({ volume: e.volume, pressure: s.peep, phase: 'deflation' });
+      if (record) addFrame(j === ne - 1 ? cycle : ti + (j + 1) * stepE, 'expiration', s.peep, e.volume, e.z, false);
     }
   }
   patient.elapsed += cycle * breaths; patient.breaths += breaths;
@@ -177,7 +207,9 @@ export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1 } = {}
   const vtDelivered = ei.volume - ee.volume, dp = ei.pressure - s.peep;
   const meanPleuralEE = patient.baselinePleural + patient.pleuralGradient * depMean + patient.chestWallElastance * (ee.volume - patient.chestWallReferenceVolume);
   const meanPleuralEI = patient.baselinePleural + patient.pleuralGradient * depMean + patient.chestWallElastance * (ei.volume - patient.chestWallReferenceVolume);
-  return { metrics: { eelv: ee.volume, vtDelivered, pplat: ei.pressure, dp, crs: dp > 1e-8 ? vtDelivered / dp : null, openEE, openEI, cyclic, over, closedPerfusion: closedPerfusion / perfusionTotal, meanPleuralEE, meanPleuralEI, transpulmonaryEI: ei.pressure - meanPleuralEI, volumeError: vtDelivered - targetVT, volumeResidual: ei.volume - finalEffectiveTarget, limited }, units, pv, settings: s, targetVT, maxPressure, simulatedSeconds: breaths * cycle, totalElapsed: patient.elapsed, breaths, dt, labels: { closedPerfusion: 'Perfusion-weighted closed fraction proxy', over: `Aerated tissue fraction above assumed Vopen(EI)/Vopen(TP5) ratio ${MODEL_INFO.highStrainCutoff}`, eelv: 'Start-of-final-breath end-expiratory gas volume', state: 'Recruitment state after final expiration' } };
+  const result = { metrics: { eelv: ee.volume, vtDelivered, pplat: ei.pressure, dp, crs: dp > 1e-8 ? vtDelivered / dp : null, openEE, openEI, cyclic, over, closedPerfusion: closedPerfusion / perfusionTotal, meanPleuralEE, meanPleuralEI, transpulmonaryEI: ei.pressure - meanPleuralEI, volumeError: vtDelivered - targetVT, volumeResidual: ei.volume - finalEffectiveTarget, limited }, units, pv, settings: s, targetVT, maxPressure, simulatedSeconds: breaths * cycle, totalElapsed: patient.elapsed, breaths, dt, labels: { closedPerfusion: 'Perfusion-weighted closed fraction proxy', over: `Aerated tissue fraction above assumed Vopen(EI)/Vopen(TP5) ratio ${MODEL_INFO.highStrainCutoff}`, eelv: 'Start-of-final-breath end-expiratory gas volume', state: 'Recruitment state after final expiration' } };
+  if (frames) result.trajectory = { kind: 'quasi-static-steps', cycle, ti, eiIndex: Math.ceil(ti / dt), releaseIndex: Math.ceil(ti / dt) + 1, frames };
+  return result;
 }
 
 export function sweep(patient, settings = {}, { peeps = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24], breaths = 10, dt = 0.1, initialState = 'fresh' } = {}) {

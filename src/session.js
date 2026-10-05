@@ -20,7 +20,7 @@ export function createSession(){
       patients=structuredClone(accepted.patients);
     }
     lastId=id;
-    const results=patients.map(p=>({...simulate(p,settings,{breaths:10,dt:0.1}),phenotype:p.kind,seed:p.seed}));
+    const results=patients.map(p=>({...simulate(p,settings,{breaths:10,dt:0.1,recordTrajectory:data.recordTrajectory===true}),phenotype:p.kind,seed:p.seed}));
     candidate={token:id,key,patients};
     return {id,type:'compare',config:structuredClone(config),results,modelInfo:MODEL_INFO,stateToken:id};
   }

@@ -4,6 +4,7 @@ export const LESSONS = {
   volume: {name:'Tidal volume and regional distension',kinds:['high','high'],baseline:{peep:8,vt:6,rr:20,pbw:70},adjustment:{vt:8},objective:'Explain how added tidal volume changes global elastic pressure and regional distension in identical lungs.',prediction:'Before applying: where will the extra volume go, and what may happen to driving pressure and distension?',reflection:'Check delivered volume alongside driving pressure and the distension proxy. Explain why global compliance cannot rule out regional distension.',instruction:'Use identical seeded lungs and raise tidal volume from 6 to 8 mL/kg PBW. Observe delivered volume, driving pressure, and the fraction above the assumed distension threshold.'}
 };
 export const METRIC_HELP = {
+  delivery:'The gas volume delivered in the breath, compared with the requested amount. Check this first: a pressure ceiling can prevent the full breath from being delivered.',
   eelv:'Gas volume remaining at expiration. It can rise because more tissue aerates or because already aerated units expand. A higher value alone does not establish benefit.',
   pplat:'Quasi-static end-inspiratory airway pressure. It includes both lung and chest-wall loads. This model does not perform a clinical inspiratory-hold measurement.',
   dp:'Plateau pressure minus PEEP. At the same delivered tidal volume, a lower value means a lower global elastic pressure requirement. Regional distension may still increase.',
@@ -54,4 +55,35 @@ export function explainAdjustment(before,after){
     tradeoff:keys.length?keys.map(key=>CONTROLS[key].tradeoff).join(' '):'Apply one adjustment to examine a mechanical tradeoff.',
     control:keys.length>1?'Multiple controls changed. These differences cannot be attributed to one ventilator adjustment. Reset the lesson baseline to compare one variable.':'Same seeds, body weight and initial state; ten breaths per setting. This controls the comparison but does not guarantee steady state.'
   };
+}
+
+// These bands simplify the displayed prediction exercise; they are not clinical cutoffs.
+const QUESTIONS={
+ recruitment:{
+  student:{metric:'openEE',patient:0,label:'Open lung at expiration',scale:100,unit:'%',band:1,prompt:'PEEP 8 → 12: will more of A’s lung stay open between breaths?',focus:'Watch the grey regions: do more remain open when the breath ends?'},
+  resident:{metric:'over',patient:1,label:'B’s distension proxy',scale:100,unit:'%',band:1,prompt:'PEEP 8 → 12: how will B’s end-inspiratory distension marker change?',focus:'Recruitment and regional overstretch can increase together. Inspect end inspiration.'},
+  fellow:{metric:'dp',patient:0,label:'A’s driving pressure',scale:1,unit:'cmH2O',band:.5,prompt:'At the same tidal volume, how will A’s driving pressure change after the PEEP increase?',focus:'Compare pressure cost with regional distension; a global improvement can hide a regional tradeoff.'}
+ },
+ wall:{
+  student:{metric:'pplat',patient:1,label:'B’s end-inspiratory airway pressure',scale:1,unit:'cmH2O',band:.5,prompt:'With a stiffer chest wall, how will B’s airway pressure change when PEEP rises?',focus:'Airway pressure includes both the lung and the chest wall.'},
+  resident:{metric:'transpulmonaryEI',patient:1,label:'B vs A lung-distending pressure',scale:1,unit:'cmH2O',band:.5,betweenPatients:true,prompt:'At matched settings, is B’s lung-distending pressure higher, similar, or lower than A’s?',focus:'Subtract pleural pressure before interpreting the lung load; airway pressure alone is incomplete.'},
+  fellow:{metric:'dp',patient:1,label:'B’s driving pressure',scale:1,unit:'cmH2O',band:.5,prompt:'At unchanged tidal volume, how will B’s driving pressure respond to the PEEP increase?',focus:'Chest-wall load changes lung volume and recruitment, as well as the pressure partition.'}
+ },
+ volume:{
+  student:{metric:'dp',patient:0,label:'A’s driving pressure',scale:1,unit:'cmH2O',band:.5,prompt:'Tidal volume 6 → 8 mL/kg: how will A’s driving pressure change?',focus:'A larger breath asks the aerated lung and chest wall to accommodate more volume.'},
+  resident:{metric:'over',patient:0,label:'A’s distension proxy',scale:100,unit:'%',band:1,prompt:'With a larger tidal volume, how will A’s end-inspiratory distension marker change?',focus:'Watch the red regions at full inspiration; more volume may stretch already open tissue.'},
+  fellow:{metric:'crs',patient:0,label:'A’s respiratory compliance',scale:1,unit:'mL/cmH2O',band:1,prompt:'As tidal volume rises, how will A’s respiratory compliance change?',focus:'The pressure-volume relation stiffens as open regions distend; compliance is not constant.'}
+ }
+};
+export function predictionQuestion(lesson,level='student'){
+ return QUESTIONS[lesson]?.[level]||QUESTIONS.recruitment.student;
+}
+export function evaluatePrediction(question,before,after,prediction){
+ const initial=question.betweenPatients?after[0]?.metrics[question.metric]:before[question.patient]?.metrics[question.metric];
+ const final=after[question.patient]?.metrics[question.metric];
+ if(!Number.isFinite(initial)||!Number.isFinite(final))return {expected:null,correct:null,observed:'This measure is unavailable for this comparison.'};
+ const a=initial*question.scale,b=final*question.scale,d=b-a;
+ const expected=d>question.band?'up':d<-question.band?'down':'same';
+ const observed=question.betweenPatients?`${question.label}: A ${a.toFixed(1)} vs B ${b.toFixed(1)} ${question.unit}.`:`${question.label}: ${a.toFixed(1)} → ${b.toFixed(1)} ${question.unit}.`;
+ return {expected,correct:['up','same','down'].includes(prediction)?prediction===expected:null,observed};
 }

@@ -14,7 +14,8 @@
     "bench": "node benchmarks/engine-benchmark.mjs",
     "bench:browser": "node benchmarks/browser-benchmark.mjs",
     "build": "node scripts/build.mjs",
-    "test:teaching-browser": "node benchmarks/teaching-browser.mjs"
+    "test:teaching-browser": "node benchmarks/teaching-browser.mjs",
+    "test:replay-browser": "node benchmarks/replay-browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

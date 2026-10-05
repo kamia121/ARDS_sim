@@ -4,6 +4,8 @@
 
 A browser educational simulator for heterogeneous regional lung mechanics. Guided lessons compare a baseline with one ventilator adjustment and explain the model tradeoffs. Compare seeded patients, recruitment history, chest-wall load, and regional distension under the same ventilator settings. This release is an uncalibrated educational model, not a patient-specific predictor or a PEEP optimizer.
 
+The lung maps replay a computed breath with pause, phase stops and a scrubber. Ventilator controls stay visible beside the models (docked above them on small screens). Student, resident and fellow/instructor prompts support predict → apply → check activities; feedback is scored against this educational model's actual response, not clinical outcomes. Expiratory pressure release remains instantaneous because airway resistance is not implemented.
+
 ## Run locally (Mac or Windows)
 
 Install Node.js 22 or newer. In this folder:
@@ -20,6 +22,8 @@ Open http://127.0.0.1:5173. No API keys or cloud inference are needed. Do not op
 npm run bench
 npx playwright install chromium
 npm run bench:browser
+npm run test:teaching-browser
+npm run test:replay-browser
 npm run build
 ```
 

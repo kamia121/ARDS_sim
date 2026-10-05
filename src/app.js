@@ -1,9 +1,14 @@
-import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment} from './teaching.js';
+import {sampleTrajectory,frameLabel} from './playback.js';
+import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment,predictionQuestion,evaluatePrediction} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
 let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,benchmarkId=0,phase='ee',timer,positions={};
 let baseline=null,baselineConfig=null,pendingBaseline=false,comparisonFresh=true,baselineRequest=0,comparisonConfig=null,baselineExpected=null,compareContext=null,acceptedStateToken=null,acceptedConfig=null;
 const selectedUnits={a:null,b:null};
+let currentFrames=[],currentFrameIndex=0,replayTime=0,raf=0,playing=false,wantPlayback=false,playStart=0,playOffset=0,prediction=null,predictionPending=null,attempts=0,correctAttempts=0,scenarioEpoch=0;
+const scoredQuestions=new Set();
+const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+const mapGeometry={};
 const colors={};
 function refreshColors(){const css=getComputedStyle(document.documentElement);for(const [key,token] of Object.entries({a:'--mon-current',b:'--mon-snap',open:'--open',cyclic:'--cyclic',over:'--over',closed:'--closed',surface:'--surface-2',grid:'--mon-grid'}))colors[key]=css.getPropertyValue(token).trim();}
 refreshColors();
@@ -14,7 +19,7 @@ function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number(
 function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
 function clearComparison(){ $('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren(); }
 function invalidateComparison(configurationChanged=false){
-  compareId=++request;compareContext=null;clearComparison();
+  pausePlayback(false);predictionPending=null;$('prediction-feedback').textContent='';compareId=++request;compareContext=null;clearComparison();
   if(pendingBaseline||configurationChanged){
     pendingBaseline=false;baseline=null;baselineConfig=null;baselineExpected=null;baselineRequest=0;
     $('apply-adjustment').disabled=true;
@@ -24,35 +29,39 @@ function invalidateComparison(configurationChanged=false){
   for(const k of ['a','b'])$('patient-'+k).setAttribute('aria-busy','true');
 }
 function compare(reset=false,recordBaseline=false){
-  comparisonFresh=reset||$('guided-mode').checked||acceptedStateToken===null||acceptedConfig!==JSON.stringify(config());labels();clearComparison();
+  pausePlayback(false);comparisonFresh=reset||$('guided-mode').checked||acceptedStateToken===null||acceptedConfig!==JSON.stringify(config());labels();clearComparison();
   $('status').textContent='Simulating 10 breaths in each patient...';$('status').removeAttribute('role');
   compareId=++request;const currentConfig=config(),currentSettings=settings();comparisonConfig=JSON.stringify(currentConfig);
   compareContext={id:compareId,config:comparisonConfig,settings:currentSettings,fresh:comparisonFresh};
   if(recordBaseline){baselineRequest=compareId;baselineExpected={...compareContext,lesson:$('lesson').value};}
-  worker.postMessage({id:compareId,type:'compare',config:currentConfig,settings:currentSettings,reset:comparisonFresh,baseStateToken:acceptedStateToken});
+  worker.postMessage({id:compareId,type:'compare',config:currentConfig,settings:currentSettings,reset:comparisonFresh,baseStateToken:acceptedStateToken,recordTrajectory:true});
 }
 function schedule(reset=false,configurationChanged=false){invalidateComparison(configurationChanged);clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
-function metric(label,value,unit='',secondary=false,helpKey=''){
+function metric(label,value,unit='',secondary=false,helpKey='',delta=''){
   const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');
   const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);
   const l=document.createElement('span');l.className='metric-label';const name=document.createElement('span');name.textContent=label;l.append(name);
   if(helpKey){const b=document.createElement('button');b.type='button';b.className='metric-help-button';b.textContent='?';b.setAttribute('aria-label','Explain '+label);b.addEventListener('click',()=>{e.closest('.patient').querySelector('.metric-description').textContent=METRIC_HELP[helpKey];});l.append(b);}
-  e.append(v,l);return e;
+  e.append(v,l);if(delta){const chip=document.createElement('small');chip.className='metric-delta';chip.textContent=delta;e.append(chip);}return e;
 }
 function updateMetrics(k,result){
-  const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(
-    metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L',false,'eelv'),metric('Plateau airway pressure',fmt(m.pplat,1),'cmH2O',false,'pplat'),
-    metric('Driving pressure',fmt(m.dp,1),'cmH2O',false,'dp'),metric('Respiratory compliance',fmt(m.crs),'mL/cmH2O',false,'crs'),
-    metric('Aerated tissue at expiration',pct(m.openEE),'',true,'openEE'),metric('Distension proxy at inspiration',pct(m.over),'',true,'over')
+  const m=result.metrics,box=$('metrics-'+k),before=comparisonFresh&&$('guided-mode').checked?baseline?.[k==='a'?0:1]?.metrics:null;
+  const delta=(key,multiplier=1,unit='')=>{if(!before||!Number.isFinite(before[key])||!Number.isFinite(m[key]))return '';const v=Number(fmt((m[key]-before[key])*multiplier,1));return `${v>0?'+':''}${fmt(v,1)} ${unit} from baseline`;};
+  box.replaceChildren(
+    metric('Delivered / requested',`${fmt(m.vtDelivered)} / ${fmt(result.targetVT)}`,'mL',false,'delivery',delta('vtDelivered',1,'mL')),
+    metric('Driving pressure',fmt(m.dp,1),'cmH2O',false,'dp',delta('dp',1,'cmH2O')),
+    metric('Open between breaths',pct(m.openEE),'',true,'openEE',delta('openEE',100,'pp')),
+    metric('Distension at end inspiration',pct(m.over),'',true,'over',delta('over',100,'pp'))
   );
   const patient=$('patient-'+k);
   let pressure=patient.querySelector('.pressure-summary');if(!pressure){pressure=document.createElement('p');pressure.className='pressure-summary';patient.append(pressure);}
   pressure.textContent=`Mean pleural pressure: ${fmt(m.meanPleuralEE,1)} at expiration → ${fmt(m.meanPleuralEI,1)} cmH2O at inspiration. Mean transpulmonary pressure at inspiration: ${fmt(m.pplat,1)} − ${fmt(m.meanPleuralEI,1)} = ${fmt(m.transpulmonaryEI,1)} cmH2O.`;
-  let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');help.textContent='Select a metric’s ? button for its definition and interpretation.';patient.append(help);}
+  let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');help.textContent='';patient.append(help);}
   let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';const summary=document.createElement('summary');summary.textContent='Additional model measures';advanced.append(summary);const values=document.createElement('div');values.className='metrics';advanced.append(values);patient.append(advanced);}
-  advanced.querySelector('.metrics').replaceChildren(metric('Intratidal aeration gain',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
+  advanced.querySelector('.metrics').replaceChildren(metric('Respiratory compliance',fmt(m.crs),'mL/cmH2O',false,'crs'),metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L',false,'eelv'),metric('Plateau airway pressure',fmt(m.pplat,1),'cmH2O',false,'pplat'),metric('Intratidal aeration gain',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
+  advanced.append(pressure);
   const delivery=$('delivery-'+k);delivery.className='delivery'+(m.limited?' limited':'');
-  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?`${fmt(result.settings.pressureLimit)} cmH2O pressure ceiling reached during inspiration; check actual delivered volume.`:'');
+  delivery.textContent=(m.limited?`${fmt(result.settings.pressureLimit)} cmH2O pressure ceiling reached during inspiration; check actual delivered volume.`:'');
   if(m.limited)delivery.setAttribute('role','alert');else delivery.removeAttribute('role');
 }
 function renderTeaching(){
@@ -61,23 +70,37 @@ function renderTeaching(){
   if(comparisonConfig!==baselineConfig||JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
   if(!comparisonFresh||!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
   const adjustment=explainAdjustment(baseline[0].settings,lastResults[0].settings);
+  if(!predictionPending)$('prediction-feedback').textContent=adjustment.changed+(adjustment.control.startsWith('Multiple')?' Multiple controls changed; isolate one change to explain its effect.':'');
   $('baseline-status').textContent='Comparing the recorded baseline with the last completed simulation.';
   for(const [key,label] of [['changed','What changed'],['held','What stayed the same'],['why','Why the model responds'],['tradeoff','Tradeoff to recognize'],['control','Comparison conditions']]){
     const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label+': ';p.append(strong,adjustment[key]);$('adjustment-explanation').append(p);
   }
   lastResults.forEach((r,i)=>{
     const x=explainComparison(baseline[i].metrics,r.metrics),article=document.createElement('article'),h=document.createElement('h3');h.textContent='Patient '+(i?'B':'A');article.append(h);
-    for(const [key,label] of [['changes','Observed changes'],['meaning','Interpretation'],['pressure','Pressure across lung tissue'],['scope','Model scope']]){const p=document.createElement('p'),strong=document.createElement('strong');p.className=key;strong.textContent=label+': ';p.append(strong,x[key]);article.append(p);}output.append(article);
+    for(const [key,label] of [['changes','Observed changes'],['meaning','Why it matters'],...($('lesson').value==='wall'||$('learner-level').value==='fellow'?[['pressure','Pressure across lung tissue']]:[])]){const p=document.createElement('p'),strong=document.createElement('strong');p.className=key;strong.textContent=label+': ';p.append(strong,x[key]);article.append(p);}output.append(article);
   });
 }
 function updateLesson(){
   const lesson=LESSONS[$('lesson').value];
   $('lesson-instruction').textContent=lesson.instruction;
   $('lesson-objective').textContent=lesson.objective;
-  $('lesson-prediction').textContent=lesson.prediction;
+  updateQuestion();
   $('lesson-reflection').textContent=lesson.reflection;
 }
+function updateQuestion(){
+  const q=predictionQuestion($('lesson').value,$('learner-level').value);$('lesson-prediction').textContent=q.prompt;
+  const names=q.betweenPatients?{up:'Higher in B',same:'Similar',down:'Lower in B'}:{up:'Increase',same:'Little change',down:'Decrease'};
+  for(const b of document.querySelectorAll('[data-prediction]')){b.textContent=names[b.dataset.prediction];b.setAttribute('aria-pressed',String(b.dataset.prediction===prediction));}
+  $('lesson-objective').textContent=q.focus;
+  $('prediction-band').textContent=`For this exercise, similar/little change means within ±${q.band} ${q.unit==='%'?'percentage point':q.unit}. This is a display band, not clinical significance.`;
+}
+for(const b of document.querySelectorAll('[data-prediction]'))b.addEventListener('click',()=>{
+  prediction=b.dataset.prediction;updateQuestion();$('prediction-feedback').textContent='Prediction recorded. Apply the change, then compare.';
+});
+$('learner-level').addEventListener('change',()=>{for(const b of document.querySelectorAll('[data-prediction]'))b.disabled=false;prediction=null;predictionPending=null;$('prediction-feedback').textContent='';updateQuestion();renderFrame();});
 function setLessonBaseline(){
+  pausePlayback();scenarioEpoch++;prediction=null;predictionPending=null;$('prediction-feedback').textContent='';
+  for(const b of document.querySelectorAll('[data-prediction]'))b.disabled=false;
   const lesson=LESSONS[$('lesson').value];
   for(const [key,value] of Object.entries(lesson.baseline))$(key).value=value;
   for(const [i,k] of ['a','b'].entries()){$('kind-'+k).value=lesson.kinds[i];$('seed-'+k).value=13791;}
@@ -91,35 +114,48 @@ $('apply-adjustment').addEventListener('click',()=>{
   $('guided-mode').checked=true;
   for(const key of ['peep','vt','rr'])$(key).value=baseline[0].settings[key];
   for(const [key,value] of Object.entries(LESSONS[$('lesson').value].adjustment))$(key).value=value;
-  invalidateSweep();clearTimeout(timer);compare(true);
+  $('prediction-feedback').textContent=prediction?'Testing your prediction…':'Applying the change…';
+  predictionPending={question:predictionQuestion($('lesson').value,$('learner-level').value),prediction,before:baseline,lesson:$('lesson').value,level:$('learner-level').value,key:`${scenarioEpoch}/${$('lesson').value}/${$('learner-level').value}`};
+  for(const b of document.querySelectorAll('[data-prediction]'))b.disabled=true;
+  wantPlayback=!reducedMotion.matches;invalidateSweep();clearTimeout(timer);compare(true);predictionPending.id=compareId;
 });
 $('guided-mode').addEventListener('change',()=>{invalidateComparison();clearTimeout(timer);compare();});
-function drawMap(k,result){
-  const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1;
-  canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
-  const cx=width/2,gap=width*.04,rx=Math.min(width*.22,100),ry=height*.46,cy=height/2;
-  for(const side of [-1,1]){ctx.fillStyle=colors.surface;ctx.beginPath();ctx.ellipse(cx+side*(rx+gap),cy,rx+8,ry+7,side*-.08,0,2*Math.PI);ctx.fill();}
+function drawMap(k,result,frame){
+  const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1,key=`${width}/${height}/${dpr}`;
+  let geo=mapGeometry[k];
+  if(!geo||geo.key!==key||geo.units!==result.units){
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+    const cx=width/2,gap=width*.04,rx=Math.min(width*.22,100),ry=height*.43,cy=height/2;
+    geo={key,units:result.units,cx,gap,rx,ry,cy,points:result.units.map((u,i)=>{const side=i%2?-1:1,y=(u.dep-.5)*2*ry*.95,envelope=Math.sqrt(Math.max(.06,1-(y/ry)**2)),jitter=(((Math.imul(i+1,2654435761)>>>0)%10000)/10000-.5)*2;return {side,dx:jitter*rx*.90*envelope,dy:y};})};mapGeometry[k]=geo;
+  }
+  const {cx,gap,rx,ry,cy}=geo,ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  const ei=result.trajectory?.frames[result.trajectory.eiIndex],volume=frame?.volume??(phase==='ei'?result.metrics.eelv+result.metrics.vtDelivered:result.metrics.eelv);
+  const sharedPeak=Math.max(...lastResults.map(r=>r.trajectory?.frames[r.trajectory.eiIndex].volume||r.metrics.eelv+r.metrics.vtDelivered));
+  const scale=Math.sqrt(Math.max(0,volume)/sharedPeak);
+  for(const side of [-1,1]){ctx.fillStyle=colors.surface;ctx.beginPath();ctx.ellipse(cx+side*(rx+gap),cy,(rx+6)*scale,(ry+5)*scale,side*-.08,0,2*Math.PI);ctx.fill();}
   positions[k]=[];
   result.units.forEach((u,i)=>{
-    const side=i%2?-1:1,dep=u.dep,y=cy+(dep-.5)*2*ry*.95;
-    const envelope=Math.sqrt(Math.max(.06,1-((y-cy)/ry)**2));
-    const jitter=(((Math.imul(i+1,2654435761)>>>0)%10000)/10000-.5)*2;
-    const x=cx+side*(rx+gap)+jitter*rx*.90*envelope;
-    const f=phase==='ee'?u.openEE:u.openEI;
-    const high=phase==='ei'&&u.strainEI>1.65&&f>.2;
-    const cyclic=Math.abs(u.openEI-u.openEE)>.08&&Math.max(u.openEI,u.openEE)>.15;
-    const state=high?'over':cyclic?'cyclic':f>.35?'open':'closed';
-    const radius=Math.max(2.2,Math.min(4.4,width/100))*(.7+.35*Math.sqrt(Math.max(0,f)));
-    ctx.globalAlpha=state==='closed'?.85:.42+.58*f;ctx.fillStyle=colors[state];ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);ctx.fill();
-    if(state==='cyclic'){ctx.globalAlpha=1;ctx.strokeStyle=colors.cyclic;ctx.lineWidth=.7;ctx.stroke();}
+    const pos=geo.points[i],x=cx+pos.side*(rx+gap)+pos.dx*scale,y=cy+pos.dy*scale;
+    const f=frame?frame.unitOpen[i]:phase==='ei'?u.openEI:u.openEE;
+    const atEI=frame?frame===ei:phase==='ei',high=atEI&&u.strainEI>1.65&&f>.2;
+    const cyclic=f-u.openEE>.08&&f>.15;
+    const state=high?'over':f>.35?'open':'closed';
+    const v=frame?frame.unitVolume[i]:phase==='ei'?u.volumeEI:u.volumeEE;
+    const radius=Math.max(1.15,Math.sqrt(Math.max(0,v)*12/Math.PI));
+    ctx.globalAlpha=state==='closed'?.75:.4+.6*f;ctx.fillStyle=colors[state];ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);ctx.fill();
+    if(cyclic){ctx.globalAlpha=1;ctx.strokeStyle=colors.cyclic;ctx.lineWidth=1;ctx.stroke();}
+    if(high){ctx.globalAlpha=Math.max(.2,f);ctx.strokeStyle=colors.over;ctx.lineWidth=1.2;ctx.strokeRect(x-radius-1,y-radius-1,2*radius+2,2*radius+2);}
     positions[k].push({x,y,u,state});
   });ctx.globalAlpha=1;
-  canvas.setAttribute('aria-label',`Patient ${k.toUpperCase()}: ${phase==='ee'?'end expiration':'end inspiration'}. Aerated fraction ${pct(phase==='ee'?result.metrics.openEE:result.metrics.openEI)}, distension proxy at inspiration ${pct(result.metrics.over)}. Schematic distribution; select a unit for details.`);
+  const name=frame&&result.trajectory?frameLabel(frame,currentFrameIndex,result.trajectory):phase==='ei'?'end inspiration':'before inspiration';
+  canvas.setAttribute('aria-label',`Patient ${k.toUpperCase()}: ${name}. Open tissue ${pct(frame?.open??result.metrics.openEE)}. End-inspiratory distension proxy ${pct(result.metrics.over)}. Select a region or enter its number.`);
 }
 function updateUnitDetail(k,result){
   const id=selectedUnits[k],u=id===null?null:result?.units.find(unit=>unit.id===id);
+  const current=currentFrames[k==='a'?0:1];
   const text=u?`Unit ${u.id}: open ${pct(u.openEE)} before inspiration / ${pct(u.openEI)} at end inspiration. Fully open volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`:'Select a lung unit on the map or enter its number to inspect the current result.';
-  if($('unit-'+k).textContent!==text)$('unit-'+k).textContent=text;
+  const display=u&&current?text+` Selected phase: open ${pct(current.unitOpen[u.id])}, gas volume ${fmt(current.unitVolume[u.id],2)} mL.`:text;
+  if($('unit-'+k).textContent!==display)$('unit-'+k).textContent=display;
 }
 for(const [i,k] of ['a','b'].entries()){
   $('map-'+k).addEventListener('click',event=>{
@@ -163,8 +199,8 @@ function drawPV(){
   const points=lastResults.flatMap(r=>r.pv).filter(p=>Number.isFinite(p.volume)&&Number.isFinite(p.pressure));
   const xmin=Math.max(0,Math.floor(Math.min(...points.map(p=>p.volume))/250)*.25-.1),xmax=Math.ceil(Math.max(...points.map(p=>p.volume))/250)*.25+.1;
   const ymax=Math.max(30,Math.ceil(Math.max(...points.map(p=>p.pressure))/5)*5+5);
-  const s=baseChart(svg,[xmin,xmax],[0,ymax],'Total gas volume (L)','Airway pressure (cmH2O)');
-  lastResults.forEach((r,i)=>{for(const phase of ['inflation','deflation'])line(svg,r.pv.filter(p=>p.phase===phase).map(p=>({x:p.volume/1000,y:p.pressure})),s,i?colors.b:colors.a);});
+  const s=baseChart(svg,[xmin,xmax],[0,ymax],'Total gas volume (L)','Airway pressure (cmH2O)');window.ardsPVScales=s;
+  lastResults.forEach((r,i)=>{const t=r.trajectory;if(t){const a=t.frames[t.eiIndex],b=t.frames[t.releaseIndex];line(svg,[{x:a.volume/1000,y:a.pressure},{x:b.volume/1000,y:b.pressure}],s,i?colors.b:colors.a,'3 4',.65);}for(const phase of ['inflation','deflation'])line(svg,r.pv.filter(p=>p.phase===phase).map(p=>({x:p.volume/1000,y:p.pressure})),s,i?colors.b:colors.a);});
 }
 function drawSweep(){
   const svg=$('sweep-chart'),s=baseChart(svg,[4,24],[0,100],'PEEP (cmH2O)','Tissue fraction (%)');
@@ -178,17 +214,23 @@ function drawSweep(){
   });
   svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending distension proxy; faint dotted lines show descending aeration. Patient A green, Patient B blue. Outlined markers indicate inspiratory pressure-ceiling exposure.');
 }
-function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i]);updateUnitDetail(k,lastResults[i]);});drawPV();}drawSweep();}
+function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i],currentFrames[i]);updateUnitDetail(k,lastResults[i]);});drawPV();renderFrame();}drawSweep();}
 worker.onmessage=({data})=>{
   if(data.type==='compare'){
     if(data.id!==compareId||compareContext?.id!==data.id)return;
     if(JSON.stringify(data.config)!==compareContext.config||compareContext.config!==JSON.stringify(config())||JSON.stringify(compareContext.settings)!==JSON.stringify(settings()))return;
     acceptedStateToken=data.stateToken;acceptedConfig=compareContext.config;worker.postMessage({id:data.stateToken,type:'accept-state'});
-    lastResults=data.results;window.ardsResults=lastResults;comparisonFresh=compareContext.fresh;
+    lastResults=data.results;window.ardsResults=lastResults;comparisonFresh=compareContext.fresh;replayTime=0;currentFrameIndex=0;currentFrames=lastResults.map(r=>r.trajectory?.frames[0]);
     for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');
     $('status').textContent=`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
-    if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value){baseline=structuredClone(lastResults);baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${baseline[0].settings.peep} cmH2O, VT ${baseline[0].settings.vt} mL/kg PBW, respiratory rate ${baseline[0].settings.rr}/min. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
-    render(); window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
+    if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value){baseline=lastResults.map(({trajectory,...summary})=>structuredClone(summary));baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent='Baseline ready. Predict, then apply the change.';$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
+    if(predictionPending?.id===data.id&&predictionPending.lesson===$('lesson').value&&predictionPending.level===$('learner-level').value){
+      const answer=evaluatePrediction(predictionPending.question,predictionPending.before,lastResults,predictionPending.prediction);
+      if(answer.correct!==null&&!scoredQuestions.has(predictionPending.key)){scoredQuestions.add(predictionPending.key);attempts++;if(answer.correct)correctAttempts++;}
+      $('prediction-feedback').textContent=(answer.correct===true?'Prediction matched. ':answer.correct===false?'Different from your prediction. ':'Observe the result. ')+answer.observed+' '+predictionPending.question.focus+(answer.correct!==null?` (${correctAttempts}/${attempts} predictions matched this session.)`:'');
+      predictionPending=null;
+    }
+    render();if(wantPlayback&&!reducedMotion.matches){$('patient-a').scrollIntoView({block:'start',behavior:'auto'});startPlayback();} window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
     const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
   }else if(data.type==='sweep'){
     if(data.id!==sweepId)return;lastSweep=data.results;window.ardsSweep=lastSweep;drawSweep();$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';
@@ -212,7 +254,10 @@ for(const k of ['a','b'])for(const type of ['kind','seed'])$(type+'-'+k).addEven
   const seed=$('seed-'+k);if(!Number.isFinite(Number(seed.value))||Number(seed.value)<0||Number(seed.value)>4294967295)seed.value=k==='a'?13791:14602;
   invalidateSweep();schedule(false,true);
 });
-for(const p of ['ee','ei'])$(p).addEventListener('click',()=>{phase=p;for(const q of ['ee','ei'])$(q).setAttribute('aria-pressed',String(q===p));render();});
+$('ee').addEventListener('click',()=>inspectFrame(0));
+$('ei').addEventListener('click',()=>inspectFrame(lastResults?.[0].trajectory?.eiIndex??0));
+$('release-breath').addEventListener('click',()=>inspectFrame(lastResults?.[0].trajectory?.releaseIndex??0));
+$('end-expiration').addEventListener('click',()=>inspectFrame((lastResults?.[0].trajectory?.frames.length??1)-1));
 $('reset').addEventListener('click',()=>{invalidateComparison();clearTimeout(timer);invalidateSweep();compare(true);});
 $('new-seeds').addEventListener('click',()=>{const seeds=new Uint32Array(2);crypto.getRandomValues(seeds);invalidateComparison(true);$('seed-a').value=seeds[0];$('seed-b').value=seeds[1];invalidateSweep();compare(true);});
 $('share').addEventListener('click',async()=>{
@@ -224,9 +269,67 @@ $('sweep').addEventListener('click',()=>{$('sweep').disabled=true;$('sweep').tex
 $('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;benchmarkId=++request;worker.postMessage({id:benchmarkId,type:'benchmark'});});
 $('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS-Sim-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 const tabs=[...document.querySelectorAll('[role=tab]')];
-function selectTab(tab){for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
+function selectTab(tab){pausePlayback();for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
 tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectTab(tab));tab.addEventListener('keydown',e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();selectTab(tabs[next]);}});});
 window.addEventListener('resize',()=>{clearTimeout(window.ardsResize);window.ardsResize=setTimeout(render,100);});
+function pausePlayback(clearIntent=true){
+  if(raf)cancelAnimationFrame(raf);raf=0;playing=false;if(clearIntent)wantPlayback=false;
+  $('play-breath').textContent='Play breath';$('play-breath').setAttribute('aria-pressed','false');
+}
+function inspectFrame(index){
+  pausePlayback();const t=lastResults?.[0].trajectory;if(!t)return;
+  const i=Math.max(0,Math.min(t.frames.length-1,Math.trunc(index)||0)),frame=t.frames[i];replayTime=frame.time;currentFrameIndex=i;currentFrames=lastResults.map(r=>r.trajectory.frames[i]);renderFrame(true);
+}
+function renderFrame(announce=false){
+  const trajectory=lastResults?.[0].trajectory;if(!trajectory)return;
+  const selected=trajectory.frames[currentFrameIndex],name=frameLabel(currentFrames[0]||selected,currentFrameIndex,trajectory);
+  $('play-breath').disabled=reducedMotion.matches||!trajectory.frames.length;$('play-breath').textContent=reducedMotion.matches?'Motion reduced':playing?'Pause':'Play breath';
+  $('breath-frame').disabled=false;$('breath-frame').max=trajectory.frames.length-1;$('breath-frame').value=currentFrameIndex;
+  $('breath-frame').setAttribute('aria-valuetext',`${name}, ${fmt(replayTime,2)} seconds`);
+  $('breath-phase').textContent=`${name==='End inspiration'&&playing?'End inspiration (inspect)':name} · ${fmt(replayTime,2)} / ${fmt(trajectory.cycle,2)} s`;
+  $('ee').setAttribute('aria-pressed',String(currentFrameIndex===0&&!playing));$('ei').setAttribute('aria-pressed',String(currentFrames[0]===trajectory.frames[trajectory.eiIndex]));$('release-breath').setAttribute('aria-pressed',String(currentFrames[0]===trajectory.frames[trajectory.releaseIndex]));$('end-expiration').setAttribute('aria-pressed',String(currentFrameIndex===trajectory.frames.length-1));
+  const label=name;
+  const phasePrompts={
+    'Before inspiration':'Grey regions contribute less to the breath. Watch whether they open as pressure rises.',
+    'Inspiration':'Open regions fill with gas. Orange rings appear where more tissue opens during the breath.',
+    'End inspiration':'Compare the recruited areas with the red squares: more lung can open while other regions overstretch.',
+    'Pressure release':'Gas volume drops immediately as pressure returns to PEEP; this model has no airway resistance.',
+    'Expiration':'PEEP is the pressure left between breaths. Watch which regions stay open and which lose aeration.',
+    'End expiration':'This is the end of the recorded breath. Compare with the start; ten breaths need not be steady state.'
+  };
+  $('phase-story').textContent=reducedMotion.matches?'Motion is reduced. Use the phase buttons or scrubber to inspect the computed breath.':phasePrompts[label]||phasePrompts.Inspiration;
+  if(currentFrames.some(f=>f?.ceilingActive))$('phase-story').textContent='The pressure ceiling constrains this part of inspiration. Compare delivered with requested volume.';
+  lastResults.forEach((r,i)=>{const frame=currentFrames[i];if(!frame)return;const k=i?'b':'a';drawMap(k,r,frame);$('live-'+k).textContent=$('lesson').value==='wall'||$('learner-level').value!=='student'?`${fmt(frame.volume/1000,2)} L · ${pct(frame.open)} open · Paw ${fmt(frame.pressure,1)} − Ppl ${fmt(frame.meanPleural,1)} = PL ${fmt(frame.pressure-frame.meanPleural,1)} cmH2O`:`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · ${pct(frame.open)} open`;if(!playing)updateUnitDetail(k,r);});
+  if(announce)$('breath-announce').textContent=$('breath-phase').textContent;
+  if(window.ardsPVScales){const scales=window.ardsPVScales;document.querySelectorAll('#pv-chart .breath-cursor').forEach(e=>e.remove());currentFrames.forEach((frame,i)=>{if(frame)$('pv-chart').append(svgEl('circle',{class:'breath-cursor',cx:scales.x(frame.volume/1000),cy:scales.y(frame.pressure),r:4,fill:i?colors.b:colors.a,stroke:'#fff','stroke-width':1}));});}
+}
+function tickPlayback(now){
+  if(!playing||document.hidden||$('explore').hidden||reducedMotion.matches){pausePlayback();return;}
+  const drawStart=performance.now();
+  const t=lastResults[0].trajectory,elapsed=(now-playStart)/1000+playOffset,hold=.45;
+  replayTime=elapsed<t.ti?elapsed:elapsed<t.ti+hold?t.ti:elapsed-hold;
+  replayTime=Math.min(t.cycle,replayTime);
+  const samples=lastResults.map(r=>sampleTrajectory(r.trajectory,replayTime));currentFrames=samples.map(s=>s.frame);currentFrameIndex=samples[0].index;
+  window.ardsAnimationCounter=(window.ardsAnimationCounter||0)+1;renderFrame();
+  if(window.ardsReplayTimings.length<240)window.ardsReplayTimings.push(performance.now()-drawStart);
+  if(replayTime>=t.cycle){pausePlayback();renderFrame(true);return;}
+  raf=requestAnimationFrame(tickPlayback);
+}
+function startPlayback(){
+  const t=lastResults?.[0].trajectory;if(!t||reducedMotion.matches||document.hidden||$('explore').hidden)return;
+  pausePlayback(false);if(replayTime>=t.cycle){replayTime=0;currentFrameIndex=0;}
+  wantPlayback=true;playing=true;playOffset=replayTime+(currentFrameIndex>=t.releaseIndex?.45:0);playStart=performance.now();window.ardsReplayTimings=[];
+  $('play-breath').textContent='Pause';$('play-breath').setAttribute('aria-pressed','true');raf=requestAnimationFrame(tickPlayback);
+}
+$('play-breath').addEventListener('click',()=>{if(playing){pausePlayback();renderFrame(true);}else startPlayback();});
+$('breath-frame').addEventListener('input',()=>inspectFrame(+$('breath-frame').value));
+document.addEventListener('keydown',event=>{if($('explore').hidden||event.target.closest('input,select,textarea,button,a,summary'))return;if(event.key===' '){event.preventDefault();if(playing){pausePlayback();renderFrame(true);}else startPlayback();}else if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();const last=(lastResults?.[0].trajectory?.frames.length??1)-1;inspectFrame(Math.max(0,Math.min(last,currentFrameIndex+(event.key==='ArrowRight'?1:-1))));}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pausePlayback();});
+reducedMotion.addEventListener('change',()=>{if(reducedMotion.matches)inspectFrame(currentFrameIndex);else renderFrame(true);});
+const dockObserver=new ResizeObserver(()=>{
+  document.documentElement.style.setProperty('--control-dock-height',`${document.querySelector('.control-dock').getBoundingClientRect().height}px`);
+  document.documentElement.style.setProperty('--breath-panel-height',`${document.querySelector('.breath-panel').getBoundingClientRect().height}px`);
+});dockObserver.observe(document.querySelector('.control-dock'));dockObserver.observe(document.querySelector('.breath-panel'));
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
 for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
