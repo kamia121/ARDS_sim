@@ -26,6 +26,8 @@ try{
  await page.locator('[data-prediction="up"]').click();await page.locator('#apply-adjustment').click();
  await page.waitForFunction(()=>document.getElementById('prediction-feedback').textContent.includes('Prediction matched'));
  assert.match(await page.locator('#prediction-feedback').textContent(),/1\/1/);
+ const observation=await page.evaluate(()=>({map:document.getElementById('map-a').getBoundingClientRect().top,bar:document.querySelector('.breath-panel').getBoundingClientRect().bottom}));
+ assert.ok(observation.map>=observation.bar,'automatic observation leaves the map clear of the sticky replay bar');
  await page.locator('#ei').click();await page.locator('#apply-adjustment').click();
  await page.waitForFunction(()=>window.ardsResults[0].settings.peep===12&&document.getElementById('prediction-feedback').textContent.includes('matched'));
  assert.match(await page.locator('#prediction-feedback').textContent(),/1\/1/,'reapplying the same prediction is not a new scored attempt');

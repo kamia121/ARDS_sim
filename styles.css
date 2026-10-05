@@ -54,3 +54,6 @@ main{max-width:1440px}.intro{padding:18px 0 12px}.intro h1{margin-bottom:6px;fon
 @media(max-width:560px){.phase-long{display:none}.phase-short{display:inline}.breath-buttons .phase{width:auto;flex:1;flex-wrap:nowrap;min-width:0}.breath-panel .phase button{font-size:11px;padding:4px 6px;white-space:nowrap}.breath-panel .legend{font-size:11px;gap:4px 10px}.breath-buttons>button{font-size:11px;padding:4px 8px}}
 :root{--closed:#8d9994}
 @media(max-width:560px){.tabs button{padding:6px 8px;font-size:12px}.tabs{gap:0}}
+/* Leave the observed lung clear of the sticky replay bar after Apply & watch. */
+.patient,.map-wrap canvas{scroll-margin-top:calc(var(--breath-panel-height,160px) + 20px)}
+@media(max-width:800px){.patient,.map-wrap canvas{scroll-margin-top:calc(var(--control-dock-height,205px) + var(--breath-panel-height,160px) + 12px)}}
