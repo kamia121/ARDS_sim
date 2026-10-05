@@ -25,16 +25,10 @@ npm run build
 
 The browser has its own device benchmark and JSON export. The static release is built in `dist/`. GitHub Actions workflows verify and deploy that directory after Pages is configured to use GitHub Actions.
 
-## Read before extending
+## Repository and deployment contents
 
-- [Teaching guide](docs/TEACHING_GUIDE.md)
-- [Model specification](docs/MODEL_SPEC.md)
-- [Engine comparison and decision](docs/ENGINE_DECISION.md)
-- [Recorded benchmarks](docs/BENCHMARK_REPORT.md)
-- [Next Codex task and remaining requirements](docs/CODEX_NEXT_TASK.md)
-- [Mac/Windows and GitHub handoff](docs/LOCAL_HANDOFF.md)
-- [Reviewed development plan](docs/DEVELOPMENT_PLAN.md)
-- [Accepted Claude findings](docs/CLAUDE_REVIEW_DECISIONS.md)
-- [Independent Claude review brief](docs/CLAUDE_REVIEW_BRIEF.md)
+The static build includes only `index.html`, styles, local fonts/assets, application modules and `.nojekyll`. Model assumptions and equations are available in the app. Source, tests, executable benchmark harnesses, package files and GitHub Actions remain tracked for reproducible development and deployment.
+
+Agent handoffs/reviews, the local `docs/` folder, `.codex/` preferences, preview images and generated benchmark results are ignored and are not deployed. Existing local copies are retained; a fresh clone does not require them. Run the included harnesses to regenerate local results.
 
 Runtime code is original and has no production dependencies. Explain was tested separately as an upstream reference; it is not bundled in this release. The app contains no clinical records. MIT license.

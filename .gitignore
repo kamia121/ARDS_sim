@@ -2,3 +2,15 @@ node_modules/
 dist/
 test-results/
 .DS_Store
+
+# Local agent instructions, handoffs, review notes and model working documents.
+docs/
+.codex/
+
+# Generated QA previews and benchmark/review results; keep executable harnesses.
+benchmarks/*.png
+benchmarks/*.jpg
+benchmarks/*.jpeg
+benchmarks/*.webp
+benchmarks/*.json
+benchmarks/*.txt
