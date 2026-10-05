@@ -21,7 +21,7 @@ npm test
 npm start
 ```
 
-No credentials should be placed in project files. The application retains the display name ARDS_Sims; its repository is ARDS_sim.
+No credentials should be placed in project files. The application retains the display name ARDS Sim; its repository is ARDS_sim.
 
 In GitHub repository Settings → Pages, choose **GitHub Actions** as the source. Run the **Deploy Pages** workflow. The public site is https://kamia121.github.io/ARDS_sim/. Deployment was verified on October 5, 2026. The workflow runs tests before building and deploying the static site.
 

@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-05T18:18:00.392Z",
-  "browser": "153.0.8010.0",
-  "scope": "Headless Chromium on Linux host; desktop/mobile layout emulation, not a physical mobile benchmark. Paired worker-plus-DOM reset timings include creation, simulation and DOM/canvas updates, but do not isolate compositor presentation.",
+  "date": "2026-10-05T18:51:47.971Z",
+  "browser": "151.0.7922.34",
+  "scope": "Headless Chromium on darwin / arm64; desktop/mobile layout emulation, not a physical mobile benchmark. Paired worker-plus-DOM reset timings include creation, simulation and DOM/canvas updates, but do not isolate compositor presentation.",
   "checks": [
     "reproducible reset",
     "phase toggle",
@@ -29,22 +29,22 @@
   ],
   "pairedUpdate": {
     "samplesMs": [
-      105.5,
-      65,
-      68.10000000009313,
-      62.5,
-      69,
-      82.4000000001397,
-      68.60000000009313
+      21.700000047683716,
+      22,
+      21.699999928474426,
+      20.5,
+      19.5,
+      19.600000023841858,
+      19.799999952316284
     ],
-    "medianMs": 68.60000000009313,
-    "p95Ms": 105.5
+    "medianMs": 20.5,
+    "p95Ms": 22
   },
   "device": {
-    "date": "2026-10-05T18:18:00.254Z",
+    "date": "2026-10-05T18:51:47.905Z",
     "environment": {
-      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.0 Safari/537.36",
-      "logicalProcessors": 9
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+      "logicalProcessors": 14
     },
     "settings": {
       "peep": 12,
@@ -60,51 +60,51 @@
         "breaths": 10,
         "dt": 0.1,
         "samplesMs": [
-          6.800000000046566,
-          7.399999999906868,
-          7.199999999953434,
-          7.199999999953434,
-          7.800000000046566,
-          6.2000000001862645,
-          4.900000000139698
+          3.5,
+          3.5,
+          3,
+          3,
+          2.899999976158142,
+          2.700000047683716,
+          2.8000000715255737
         ],
-        "medianMs": 7.199999999953434,
-        "p95Ms": 7.800000000046566,
-        "realTimeFactor": 4166.666666693614
+        "medianMs": 3,
+        "p95Ms": 3.5,
+        "realTimeFactor": 10000
       },
       {
         "units": 512,
         "breaths": 10,
         "dt": 0.1,
         "samplesMs": [
-          20.5999999998603,
-          25,
-          34,
-          26.4000000001397,
-          26.100000000093132,
-          22.300000000046566,
-          19.399999999906868
+          9.700000047683716,
+          9.300000071525574,
+          9.299999952316284,
+          9,
+          8.899999976158142,
+          9.100000023841858,
+          8.899999976158142
         ],
-        "medianMs": 25,
-        "p95Ms": 34,
-        "realTimeFactor": 1200
+        "medianMs": 9.100000023841858,
+        "p95Ms": 9.700000047683716,
+        "realTimeFactor": 3296.7032880659854
       },
       {
         "units": 2048,
         "breaths": 10,
         "dt": 0.1,
         "samplesMs": [
-          100.5,
-          85.80000000004657,
-          96.10000000009313,
-          93.69999999995343,
-          88.10000000009313,
-          157.89999999990687,
-          169.20000000018626
+          32.89999997615814,
+          29.899999976158142,
+          32,
+          31.399999976158142,
+          31.299999952316284,
+          31,
+          31.5
         ],
-        "medianMs": 96.10000000009313,
-        "p95Ms": 169.20000000018626,
-        "realTimeFactor": 312.17481789772035
+        "medianMs": 31.399999976158142,
+        "p95Ms": 32.89999997615814,
+        "realTimeFactor": 955.4140134642944
       }
     ]
   }

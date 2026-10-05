@@ -3,14 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#133e49">
+  <meta name="theme-color" content="#0E2B73">
   <meta name="description" content="Educational simulation of regional lung recruitment, aeration, distension, and chest-wall mechanics.">
-  <title>ARDS_Sims | Regional lung mechanics</title>
+  <title>ARDS Sim | Regional lung mechanics</title>
+  <script>try{const t=localStorage.getItem("ards-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;}catch{}</script>
+  <link rel="stylesheet" href="./fonts.css">
+  <link rel="stylesheet" href="./theme.css">
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./src/app.js"></script>
 </head>
 <body>
-<header class="masthead"><a href="./" class="wordmark">ARDS_Sims</a><span class="edition">EDUCATIONAL PHYSIOLOGY / v0.1</span></header>
+<header class="masthead"><a href="./" class="wordmark">ARDS Sim</a><button id="theme-toggle" type="button" class="theme-button" aria-label="Toggle light or dark theme">Dark mode</button></header>
 <main>
   <section class="intro"><div><h1>Regional lung mechanics</h1><p class="lede">Compare recruitment, aeration, regional distension, and chest-wall mechanics in two simulated patients.</p></div></section>
   <nav class="tabs" role="tablist" aria-label="Workspaces"><button type="button" class="active" id="tab-explore" role="tab" aria-selected="true" aria-controls="explore">Simulation</button><button type="button" id="tab-benchmarks" role="tab" aria-selected="false" aria-controls="benchmarks">Benchmarks</button><button type="button" id="tab-model" role="tab" aria-selected="false" aria-controls="model">Model &amp; assumptions</button></nav>
@@ -19,16 +22,18 @@
       <h2 id="teaching-title">Guided comparison</h2>
       <p>Use this simulator to understand mechanical responses to a controlled ventilator change. Map colors describe model states; they are not a good/bad score.</p><p class="caption"><strong>Map:</strong> green = more aerated; grey = less aerated; orange = changing aeration; red = assumed high distension at inspiration.</p>
       <div class="teaching-controls"><label for="lesson">Topic<select id="lesson"><option value="recruitment">PEEP and recruitability</option><option value="wall">Chest-wall pressure</option><option value="volume">Tidal volume and regional distension</option></select></label><button id="set-baseline" type="button">1. Set baseline</button><button id="apply-adjustment" type="button" disabled>2. Apply adjustment</button><label class="guided-toggle"><input id="guided-mode" type="checkbox" checked>Fresh patients for each comparison</label></div>
-      <p id="lesson-instruction"></p><p id="baseline-status" class="caption" aria-live="polite">Preparing a reproducible baseline...</p>
+      <p><strong>Learning objective:</strong> <span id="lesson-objective"></span></p><p id="lesson-instruction"></p><p id="lesson-prediction"></p><p id="baseline-status" class="caption" aria-live="polite">Preparing a reproducible baseline...</p>
+      <div id="adjustment-explanation" class="adjustment-explanation" aria-live="polite"></div>
       <div id="comparison-explanation" class="comparison-explanation" aria-live="polite"></div>
+      <p><strong>Explain your result:</strong> <span id="lesson-reflection"></span></p>
       <p class="caption">Each guided comparison uses the same initial seeds and 10 breaths. It is not guaranteed to be at steady state. Uncheck fresh patients to explore retained pressure history.</p>
     </section>
 
     <div class="controls">
-      <label for="peep">PEEP <output id="peep-value">8</output><span>cmH2O</span><input id="peep" type="range" min="4" max="24" step="1" value="8"></label>
-      <label for="vt">Tidal volume <output id="vt-value">6</output><span>mL/kg PBW</span><input id="vt" type="range" min="4" max="8" step="0.5" value="6"></label>
-      <label for="rr">Respiratory rate <output id="rr-value">20</output><span>/min</span><input id="rr" type="range" min="12" max="30" step="1" value="20"></label>
-      <label for="pbw">Predicted body weight <output id="pbw-value">70</output><span>kg</span><input id="pbw" type="range" min="50" max="100" step="5" value="70"></label>
+      <label for="peep">PEEP <output id="peep-value">8</output><span>cmH2O</span><input aria-describedby="peep-help" id="peep" type="range" min="4" max="24" step="1" value="8"><small id="peep-help" class="control-help">Positive end-expiratory pressure: airway pressure remaining between breaths.</small></label>
+      <label for="vt">Tidal volume <output id="vt-value">6</output><span>mL/kg PBW</span><input aria-describedby="vt-help" id="vt" type="range" min="4" max="8" step="0.5" value="6"><small id="vt-help" class="control-help">Gas volume requested per breath, scaled to predicted body weight (PBW).</small></label>
+      <label for="rr">Respiratory rate <output id="rr-value">20</output><span>/min</span><input aria-describedby="rr-help" id="rr" type="range" min="12" max="30" step="1" value="20"><small id="rr-help" class="control-help">Breaths per minute; changes time available for tissue opening and closing.</small></label>
+      <label for="pbw">Predicted body weight <output id="pbw-value">70</output><span>kg</span><input aria-describedby="pbw-help" id="pbw" type="range" min="50" max="100" step="5" value="70"><small id="pbw-help" class="control-help">Model body-size scale; changing it requires a new comparison baseline.</small></label>
     </div>
     <div class="toolbar"><div class="phase" role="group" aria-label="Lung map phase"><button id="ee" type="button" aria-pressed="true">End expiration</button><button id="ei" type="button" aria-pressed="false">End inspiration</button></div><div class="actions"><button type="button" id="reset">Reset patients</button><button type="button" id="new-seeds">New seeds</button><button type="button" id="share">Copy scenario link</button></div></div>
     <p id="status" class="status" aria-live="polite">Preparing the two patients...</p>

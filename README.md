@@ -1,4 +1,4 @@
-# ARDS_Sims
+# ARDS Sim
 
 [Open the simulator](https://kamia121.github.io/ARDS_sim/)
 

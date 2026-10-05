@@ -1,0 +1,100 @@
+/* All colours live here. MCW green and navy were sampled from the mcw.edu header and logo
+   (#2F6E66, #0E2B73). Swap these values if MCW Marketing supplies official codes. */
+:root {
+  --mcw-green: #2F6E66;
+  --mcw-navy: #0E2B73;
+
+  --bg: #FAFAF8;
+  --surface: #FFFFFF;
+  --surface-2: #F1F3F2;
+  --border: #D9DEDC;
+  --text: #1C2321;
+  --text-muted: #56615E;
+  --header-bg: var(--mcw-navy);
+  --header-text: #FFFFFF;
+  --accent-bar: var(--mcw-green);
+  --link: #245A53;
+
+  /* plot series: colour = which heart, dash = which relation */
+  --series-current: #2F6E66;   /* the ventricle you are changing */
+  --series-ref: #9AA3A0;       /* normal reference ventricle */
+  --series-snap: #0E2B73;      /* pinned snapshot */
+  --grid: #E6E9E8;
+  --axis: #56615E;
+
+  --flag: #9A6B12;             /* outside reference range (text only, never a fill) */
+  --flag-bg: #FBF4E6;
+  --focus: #0E2B73;
+  /* diastolic grades: normal in the reference gray, grades I–IV as one ordinal blue ramp, light → dark */
+  --g0: #9AA3A0; --g1: #86B6EF; --g2: #3987E5; --g3: #1C5CAB; --g4: #0D366B;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111615;
+    --surface: #181E1D;
+    --surface-2: #1F2726;
+    --border: #2E3836;
+    --text: #E4E9E7;
+    --text-muted: #9BA7A4;
+    --header-bg: #0B1D4D;
+    --header-text: #EEF1F7;
+    --accent-bar: #3F8C82;
+    --link: #7CC2B8;
+    --series-current: #5FB3A7;
+    --series-ref: #6A7572;
+    --series-snap: #9DB2EC;
+    --grid: #252E2C;
+    --axis: #9BA7A4;
+    --flag: #E0B35F;
+    --flag-bg: #2A2416;
+    --focus: #9DB2EC;
+    --g0: #6A7572; --g1: #256ABF; --g2: #3987E5; --g3: #6DA7EC; --g4: #B7D3F6;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111615;
+  --surface: #181E1D;
+  --surface-2: #1F2726;
+  --border: #2E3836;
+  --text: #E4E9E7;
+  --text-muted: #9BA7A4;
+  --header-bg: #0B1D4D;
+  --header-text: #EEF1F7;
+  --accent-bar: #3F8C82;
+  --link: #7CC2B8;
+  --series-current: #5FB3A7;
+  --series-ref: #6A7572;
+  --series-snap: #9DB2EC;
+  --grid: #252E2C;
+  --axis: #9BA7A4;
+  --flag: #E0B35F;
+  --flag-bg: #2A2416;
+  --focus: #9DB2EC;
+  --g0: #6A7572; --g1: #256ABF; --g2: #3987E5; --g3: #6DA7EC; --g4: #B7D3F6;
+  color-scheme: dark;
+}
+
+/* Dark "monitor" panels used for PV loops, pressure traces and echo screens in both themes.
+   Traces are brighter tints of the MCW green and navy. */
+:root {
+  --mon-bg: #0A1311;
+  --mon-grid: #16251F;
+  --mon-axis: #7E918B;
+  --mon-text: #D5E2DE;
+  --mon-current: #5FD0BD;
+  --mon-ref: #5E6D69;
+  --mon-snap: #A9BCF2;
+  --mon-flag: #E8B962;
+}
+
+:root {
+  --ink:var(--text); --muted:var(--text-muted); --paper:var(--bg); --panel:var(--surface);
+  --a:var(--series-current); --b:var(--series-snap);
+  --open:#259880; --cyclic:#d99629; --over:#cf604e; --closed:#d4dedb;
+  font-family:"Source Sans 3","Segoe UI",system-ui,-apple-system,sans-serif;
+  color:var(--ink);background:var(--paper);font-size:17px;
+}

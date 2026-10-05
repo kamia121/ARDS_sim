@@ -1,6 +1,6 @@
 # Teaching use and interpretation
 
-ARDS_Sims is intended for supervised education about mechanical responses to controlled ventilator changes. Its current release is not a validated ventilator optimizer. Use the guided comparisons to form a prediction, apply one adjustment, and explain changes in aeration, global elastic pressure, chest-wall contribution, and regional distension together.
+ARDS Sim is intended for supervised education about mechanical responses to controlled ventilator changes. Its current release is not a validated ventilator optimizer. Use the guided comparisons to form a prediction, apply one adjustment, and explain changes in aeration, global elastic pressure, chest-wall contribution, and regional distension together.
 
 The default lesson compares higher and lower recruitability at PEEP 8 then 12 cmH2O, VT 6 mL/kg PBW, RR 20 and PBW 70 kg, with the same seed for both patients. Each comparison starts from the same illustrative initial recruitment state and runs ten breaths. That controls initial state and dwell time, but does not guarantee steady state. The history mode retains recruitment state for a separate hysteresis experiment.
 
@@ -12,6 +12,8 @@ The pressure display explicitly separates end-inspiratory airway pressure, model
 
 Interpretation text uses qualitative change thresholds of 1 percentage point for tissue fractions and 0.5 cmH2O for driving pressure to distinguish small changes from larger ones in the teaching narrative. These thresholds are not clinical significance cutoffs, measurement uncertainty estimates, or treatment targets. Pressure-limited delivery receives a separate caveat because reduced delivered VT can change the apparent pressure and compliance response.
 
+Each lesson states its learning objective, asks for a prediction, and provides a reflection prompt. After an adjustment, the interface separates the actual setting changes, held controls, model mechanism, tradeoff, and per-patient observed response. Free slider exploration reports all changed controls and warns when more than one changed. The lesson adjustment restores the recorded baseline ventilator controls before applying its one-variable change; changes to seed, phenotype or body weight require a new baseline. Recruitment-history results are excluded from the controlled comparison.
+
 Metric help is available through keyboard-accessible question-mark buttons. Less immediately useful measures (intratidal aeration gain and perfusion-weighted closed fraction) are under Additional model measures. The latter is not physiological shunt.
 
 ## Planned extensions requested by the user
@@ -21,3 +23,9 @@ Continuous inspiration/expiration animation, regional airflow and emptying ratio
 Candidate next implementation: record within-breath regional trajectories; add an explicitly resisted respiratory model with mass-consistent flow and measured emptying; then evaluate a pressure-coupled adult Explain cardiovascular model with its own validation and benchmark. Keep one-way or two-way coupling, cardiovascular parameter assumptions, and the absence of patient calibration explicit. The existing Explain trial and independent review brief support this work.
 
 Sources for model development and pressure interpretation: https://pulse.kitware.com/_cardiovascular_methodology.html ; https://research.utwente.nl/en/publications/mechanical-ventilation-induced-intrathoracic-pressure-distributio/ ; https://www.frontiersin.org/journals/network-physiology/articles/10.3389/fnetp.2023.1257710/full
+
+## Theme and learner review
+
+The interface follows the palette and typography in `kamia121/VA_coupling_sim` at commit `ef3b84ac07fa3c76ba0f1ec0d52e363a3e1fa756`: navy header, green accents, Source Serif 4 headings, Source Sans 3 body text, Source Code Pro numeric values, muted surfaces, and dark plot panels. Light/dark mode follows the system until an explicit choice is stored. Fonts and their SIL Open Font Licenses are bundled locally. The display name is ARDS Sim, part of the user's PCCM microsim series. Regional green/grey/orange/red states retain their original model meanings across themes.
+
+Automated browser checks verify controls, explanation content, theme persistence and responsive layouts. A supervised learner session remains necessary to establish usability. Ask the learner to predict, apply and explain each scenario without coaching; check whether they can identify the changed control, the model mechanism and the regional tradeoff. Record misunderstandings before claiming learner validation.

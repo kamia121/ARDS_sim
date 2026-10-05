@@ -1,15 +1,17 @@
-import {LESSONS,METRIC_HELP,explainComparison} from './teaching.js';
+import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
 let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,phase='ee',timer,positions={};
-let baseline=null,baselineConfig=null,pendingBaseline=true,comparisonFresh=true;
-const colors={a:'#137b88',b:'#6552a0',open:'#259880',cyclic:'#d99629',over:'#cf604e',closed:'#d4dedb'};
+let baseline=null,baselineConfig=null,pendingBaseline=true,comparisonFresh=true,baselineRequest=0,comparisonConfig=null;
+const colors={};
+function refreshColors(){const css=getComputedStyle(document.documentElement);for(const [key,token] of Object.entries({a:'--mon-current',b:'--mon-snap',open:'--open',cyclic:'--cyclic',over:'--over',closed:'--closed',surface:'--surface-2',grid:'--mon-grid'}))colors[key]=css.getPropertyValue(token).trim();}
+refreshColors();
 const fmt=(x,n=0)=>Number.isFinite(x)?x.toFixed(n):'--';
 const pct=x=>fmt(x*100)+'%';
 function settings(){return {peep:+$('peep').value,vt:+$('vt').value,rr:+$('rr').value,pressureLimit:45};}
 function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number($('seed-'+k).value)>>>0,pbw:+$('pbw').value}));}
 function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
-function compare(reset=false){comparisonFresh=reset||$('guided-mode').checked;labels();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset:comparisonFresh});}
+function compare(reset=false){comparisonFresh=reset||$('guided-mode').checked;labels();$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;comparisonConfig=JSON.stringify(config());if(pendingBaseline)baselineRequest=compareId;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset:comparisonFresh});}
 function schedule(reset=false){clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
 function metric(label,value,unit='',secondary=false,helpKey=''){
   const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');
@@ -35,34 +37,49 @@ function updateMetrics(k,result){
   if(m.limited)delivery.setAttribute('role','alert');else delivery.removeAttribute('role');
 }
 function renderTeaching(){
-  const output=$('comparison-explanation');output.replaceChildren();
+  const output=$('comparison-explanation');output.replaceChildren();$('adjustment-explanation').replaceChildren();
   if(!baseline||!lastResults)return;
-  if(JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
+  if(comparisonConfig!==baselineConfig||JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
   if(!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
+  const adjustment=explainAdjustment(baseline[0].settings,lastResults[0].settings);
+  $('baseline-status').textContent='Comparing the recorded baseline with the last completed simulation.';
+  for(const [key,label] of [['changed','What changed'],['held','What stayed the same'],['why','Why the model responds'],['tradeoff','Tradeoff to recognize'],['control','Comparison conditions']]){
+    const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label+': ';p.append(strong,adjustment[key]);$('adjustment-explanation').append(p);
+  }
   lastResults.forEach((r,i)=>{
     const x=explainComparison(baseline[i].metrics,r.metrics),article=document.createElement('article'),h=document.createElement('h3');h.textContent='Patient '+(i?'B':'A');article.append(h);
-    for(const [key,text] of Object.entries(x)){const p=document.createElement('p');p.className=key;p.textContent=text;article.append(p);}output.append(article);
+    for(const [key,label] of [['changes','Observed changes'],['meaning','Interpretation'],['pressure','Pressure across lung tissue'],['scope','Model scope']]){const p=document.createElement('p'),strong=document.createElement('strong');p.className=key;strong.textContent=label+': ';p.append(strong,x[key]);article.append(p);}output.append(article);
   });
+}
+function updateLesson(){
+  const lesson=LESSONS[$('lesson').value];
+  $('lesson-instruction').textContent=lesson.instruction;
+  $('lesson-objective').textContent=lesson.objective;
+  $('lesson-prediction').textContent=lesson.prediction;
+  $('lesson-reflection').textContent=lesson.reflection;
 }
 function setLessonBaseline(){
   const lesson=LESSONS[$('lesson').value];
   for(const [key,value] of Object.entries(lesson.baseline))$(key).value=value;
   for(const [i,k] of ['a','b'].entries()){$('kind-'+k).value=lesson.kinds[i];$('seed-'+k).value=13791;}
-  $('guided-mode').checked=true;$('lesson-instruction').textContent=lesson.instruction;$('apply-adjustment').disabled=true;
-  pendingBaseline=true;baseline=null;invalidateSweep();clearTimeout(timer);compare(true);
+  $('guided-mode').checked=true;updateLesson();$('apply-adjustment').disabled=true;
+  pendingBaseline=true;baseline=null;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();invalidateSweep();clearTimeout(timer);compare(true);
 }
 $('set-baseline').addEventListener('click',setLessonBaseline);
 $('lesson').addEventListener('change',setLessonBaseline);
 $('apply-adjustment').addEventListener('click',()=>{
+  if(!baseline||JSON.stringify(config())!==baselineConfig){setLessonBaseline();return;}
+  $('guided-mode').checked=true;
+  for(const key of ['peep','vt','rr'])$(key).value=baseline[0].settings[key];
   for(const [key,value] of Object.entries(LESSONS[$('lesson').value].adjustment))$(key).value=value;
   invalidateSweep();clearTimeout(timer);compare(true);
 });
-$('guided-mode').addEventListener('change',()=>{renderTeaching();});
+$('guided-mode').addEventListener('change',()=>{clearTimeout(timer);compare();});
 function drawMap(k,result){
   const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1;
   canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
   const cx=width/2,gap=width*.04,rx=Math.min(width*.22,100),ry=height*.46,cy=height/2;
-  for(const side of [-1,1]){ctx.fillStyle='#f1f5f3';ctx.beginPath();ctx.ellipse(cx+side*(rx+gap),cy,rx+8,ry+7,side*-.08,0,2*Math.PI);ctx.fill();}
+  for(const side of [-1,1]){ctx.fillStyle=colors.surface;ctx.beginPath();ctx.ellipse(cx+side*(rx+gap),cy,rx+8,ry+7,side*-.08,0,2*Math.PI);ctx.fill();}
   positions[k]=[];
   result.units.forEach((u,i)=>{
     const side=i%2?-1:1,dep=u.dep,y=cy+(dep-.5)*2*ry*.95;
@@ -93,14 +110,14 @@ function baseChart(svg,xDomain,yDomain,xLabel,yLabel){
   const x=v=>left+(v-xDomain[0])/(xDomain[1]-xDomain[0])*(w-left-right),y=v=>h-bottom-(v-yDomain[0])/(yDomain[1]-yDomain[0])*(h-top-bottom);
   for(let i=0;i<=4;i++){
     const v=yDomain[0]+i*(yDomain[1]-yDomain[0])/4;
-    svg.append(svgEl('line',{x1:left,y1:y(v),x2:w-right,y2:y(v),stroke:'#d6e0dd','stroke-width':.6}));
+    svg.append(svgEl('line',{x1:left,y1:y(v),x2:w-right,y2:y(v),stroke:colors.grid,'stroke-width':.6}));
     svg.append(svgEl('text',{x:left-8,y:y(v)+4,'text-anchor':'end'},fmt(v,yDomain[1]<=1?1:0)));
   }
   for(let i=0;i<=4;i++){
     const v=xDomain[0]+i*(xDomain[1]-xDomain[0])/4;
     svg.append(svgEl('text',{x:x(v),y:h-bottom+22,'text-anchor':'middle'},fmt(v,xDomain[1]<=10?1:0)));
   }
-  svg.append(svgEl('line',{x1:left,y1:h-bottom,x2:w-right,y2:h-bottom,stroke:'#9aacab'}));
+  svg.append(svgEl('line',{x1:left,y1:h-bottom,x2:w-right,y2:h-bottom,stroke:'#7E918B'}));
   svg.append(svgEl('text',{x:(left+w-right)/2,y:h-8,'text-anchor':'middle'},xLabel));
   svg.append(svgEl('text',{x:15,y:top+(h-top-bottom)/2,transform:`rotate(-90 15 ${top+(h-top-bottom)/2})`,'text-anchor':'middle'},yLabel));
   return {x,y,w,h,left,right,top,bottom};
@@ -126,19 +143,19 @@ function drawSweep(){
     line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.over*100})),s,c,'6 4');
     line(svg,r.descending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c,'2 4',.4);
   });
-  svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending high-strain tissue; faint dotted lines show descending aeration. Patient A teal, Patient B purple.');
+  svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending high-strain tissue; faint dotted lines show descending aeration. Patient A green, Patient B blue.');
 }
 function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i]);});drawPV();}drawSweep();}
 worker.onmessage=({data})=>{
   if(data.type==='compare'){
     if(data.id!==compareId)return;lastResults=data.results;window.ardsResults=lastResults;
-    $('status').textContent=`10 breaths simulated at RR ${settings().rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: 45 cmH2O.`;
-    if(pendingBaseline){baseline=structuredClone(lastResults);baselineConfig=JSON.stringify(config());pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${settings().peep} cmH2O, VT ${settings().vt} mL/kg PBW. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();}else renderTeaching();
+    $('status').textContent=`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: 45 cmH2O.`;
+    if(pendingBaseline&&data.id===baselineRequest){baseline=structuredClone(lastResults);baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${baseline[0].settings.peep} cmH2O, VT ${baseline[0].settings.vt} mL/kg PBW, respiratory rate ${baseline[0].settings.rr}/min. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
     render(); window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
     const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
   }else if(data.type==='sweep'){
     if(data.id!==sweepId)return;lastSweep=data.results;window.ardsSweep=lastSweep;drawSweep();$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';
-    $('sweep-caption').textContent='A teal / B purple. Solid: ascending aerated fraction. Dashed: ascending high-strain fraction. Faint dotted: descending aeration. Fresh seeded patients; 10 breaths per PEEP step; active state preserved.';
+    $('sweep-caption').textContent='A green / B blue. Solid: ascending aerated fraction. Dashed: ascending high-strain fraction. Faint dotted: descending aeration. Fresh seeded patients; 10 breaths per PEEP step; active state preserved.';
   }else if(data.type==='benchmark-progress'){$('benchmark-status').textContent=data.message;}
   else if(data.type==='benchmark'){
     deviceResults=data.results;window.ardsBenchmark=deviceResults;$('benchmark-rows').replaceChildren();
@@ -166,7 +183,7 @@ $('share').addEventListener('click',async()=>{
 });
 $('sweep').addEventListener('click',()=>{$('sweep').disabled=true;$('sweep').textContent='Sweeping...';sweepId=++request;worker.postMessage({id:sweepId,type:'sweep',config:config(),settings:settings()});});
 $('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;worker.postMessage({id:++request,type:'benchmark'});});
-$('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS_Sims-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+$('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS-Sim-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 const tabs=[...document.querySelectorAll('[role=tab]')];
 function selectTab(tab){for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
 tabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectTab(tab));tab.addEventListener('keydown',e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length;tabs[next].focus();selectTab(tabs[next]);}});});
@@ -174,4 +191,14 @@ window.addEventListener('resize',()=>{clearTimeout(window.ardsResize);window.ard
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
 for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
-labels();drawSweep();if(params.size){$('lesson-instruction').textContent=LESSONS.recruitment.instruction;compare(true);}else setLessonBaseline();
+labels();drawSweep();if(params.size){updateLesson();compare(true);}else setLessonBaseline();
+
+const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
+function currentTheme(){return document.documentElement.dataset.theme|| (themeMedia.matches?'dark':'light');}
+function updateTheme(){ $('theme-toggle').textContent=currentTheme()==='dark'?'Light mode':'Dark mode';refreshColors();render();}
+$('theme-toggle').addEventListener('click',()=>{
+  const next=currentTheme()==='dark'?'light':'dark';document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('ards-theme',next);}catch{}
+  updateTheme();
+});
+themeMedia.addEventListener('change',updateTheme);updateTheme();

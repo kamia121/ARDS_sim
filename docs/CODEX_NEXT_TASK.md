@@ -1,10 +1,10 @@
-# Codex handoff: ARDS_Sims
+# Codex handoff: ARDS Sim
 
 Continue this repository rather than starting a new project.
 
 - Repository: https://github.com/kamia121/ARDS_sim
 - Public site: https://kamia121.github.io/ARDS_sim/
-- Display name: **ARDS_Sims**. The repository name remains ARDS_sim.
+- Display name: **ARDS Sim**. The repository name remains ARDS_sim.
 - Requested development model: GPT-6.1 Sol, high reasoning; `.codex/config.toml` records this preference. Confirm the local client actually selects it.
 - The user may work on a Mac mini or Windows PC. No connection or transfer to either computer has been performed from the originating session.
 - The user requests independent Claude Opus 5.5/high review on the Mac mini if available. Review has not occurred; use `CLAUDE_REVIEW_BRIEF.md` and record substantive findings.
@@ -17,9 +17,9 @@ The first use case is a guided comparison of a controlled ventilator adjustment:
 
 ## Current implementation
 
-The original reduced regional core has persistent pressure/time-dependent recruitment, nonlinear open-unit volume relations, chest-wall coupling, a pressure ceiling, paired phenotypes, standardized sweeps, and reproducible seeds. Default guided comparisons create fresh initial seeded patients and run ten breaths; separate history mode retains state. Metric explanations and baseline-to-adjustment narratives are implemented. Tests, raw benchmarks, equations and browser checks are in the repository. GitHub Actions tests/builds and deploys Pages.
+The original reduced regional core has persistent pressure/time-dependent recruitment, nonlinear open-unit volume relations, chest-wall coupling, a pressure ceiling, paired phenotypes, standardized sweeps, and reproducible seeds. Default guided comparisons create fresh initial seeded patients and run ten breaths; separate history mode retains state. Metric explanations and baseline-to-adjustment narratives are implemented. Each lesson now includes an objective, prediction and reflection; comparison text identifies changed and held settings, explains the control mechanism and tradeoff, and warns about multiple-control changes. Guided adjustments restore baseline controls first. The interface follows VA_coupling_sim typography, palette, monitor panels and persistent light/dark mode; the header displays ARDS Sim without an edition label. Tests, raw benchmarks, equations and browser checks are in the repository. GitHub Actions tests/builds and deploys Pages.
 
-Twelve core numerical checks and three interpretation tests pass. Browser checks cover responsive layouts, state and sweep behavior, and all three guided lessons. The model is still quasi-static: no resisted airflow, realistic emptying, cardiovascular dynamics or continuous breathing animation is implemented.
+Twelve core numerical checks and five interpretation tests pass. Browser checks cover responsive layouts, state and sweep behavior, and all three guided lessons. The model is still quasi-static: no resisted airflow, realistic emptying, cardiovascular dynamics or continuous breathing animation is implemented.
 
 Pulse, Explain, BioGears and smaller prototypes were considered. A pinned adult Explain Engine integration/throughput trial was executed; see ENGINE_DECISION.md and results-explain.json. Explain is not bundled in this release. Do not claim inherited upstream validation.
 
