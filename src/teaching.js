@@ -1,5 +1,5 @@
 export const LESSONS = {
-  recruitment: {name:'PEEP and recruitability',kinds:['high','low'],baseline:{peep:8,vt:6,rr:20,pbw:70},adjustment:{peep:12},objective:'Explain why the same PEEP increase can produce different aeration and distension responses.',prediction:'Before applying: which patient will gain more aerated tissue, and could distension increase in both?',reflection:'Compare the aeration gain and distension change in A and B. Explain why a lower driving pressure alone cannot identify the preferable setting.',instruction:'Compare the same PEEP increase in lungs with different assumed opening thresholds. Look for aeration gain, driving-pressure change, and increased regional distension.'},
+  recruitment: {name:'PEEP and recruitability',kinds:['high','low'],baseline:{peep:8,vt:6,rr:20,pbw:70},adjustment:{peep:12},objective:'Explain why the same PEEP increase can produce different aeration and distension responses.',prediction:'Before applying: which patient will gain more aerated tissue, and could distension increase in both?',reflection:'Compare the aeration gain and distension change in A and B. Explain why a lower driving pressure alone cannot establish benefit.',instruction:'Compare the same PEEP increase in lungs with different assumed opening thresholds. Look for aeration gain, driving-pressure change, and increased regional distension.'},
   wall: {name:'Chest-wall pressure',kinds:['high','wall'],baseline:{peep:8,vt:6,rr:20,pbw:70},adjustment:{peep:12},objective:'Separate the chest-wall contribution to airway pressure from the pressure across lung tissue.',prediction:'Before applying: will a higher airway pressure in B necessarily mean a higher transpulmonary pressure?',reflection:'Use airway minus pleural pressure in each patient. Explain how chest-wall load changes the interpretation of airway pressure.',instruction:'These patients share the same seeded lung assumptions. Patient B has greater chest-wall load. Compare airway pressure with mean transpulmonary pressure; airway pressure alone cannot separate lung from chest-wall load.'},
   volume: {name:'Tidal volume and regional distension',kinds:['high','high'],baseline:{peep:8,vt:6,rr:20,pbw:70},adjustment:{vt:8},objective:'Explain how added tidal volume changes global elastic pressure and regional distension in identical lungs.',prediction:'Before applying: where will the extra volume go, and what may happen to driving pressure and distension?',reflection:'Check delivered volume alongside driving pressure and the distension proxy. Explain why global compliance cannot rule out regional distension.',instruction:'Use identical seeded lungs and raise tidal volume from 6 to 8 mL/kg PBW. Observe delivered volume, driving pressure, and the fraction above the assumed distension threshold.'}
 };
@@ -13,18 +13,28 @@ export const METRIC_HELP = {
   over:'Aerated tissue above an assumed fully open volume ratio of 1.65 relative to that unit at transpulmonary pressure 5 cmH2O. This is a distension proxy, not a validated injury cutoff.',
   closedPerfusion:'Closed tissue weighted by an assumed dependent perfusion gradient. This is a proxy only; it is not physiological shunt or an oxygen-saturation prediction.'
 };
+export const VT_DISPLAY_TOLERANCE_ML=1;
 const signed=(v,n=1)=>`${v>=0?'+':''}${v.toFixed(n)}`;
 export function explainComparison(before,after){
   const a=(after.openEE-before.openEE)*100,d=after.dp-before.dp,h=(after.over-before.over)*100;
   const compliance=Number.isFinite(before.crs)&&Number.isFinite(after.crs)?` compliance ${signed(after.crs-before.crs)} mL/cmH2O;`:"";
   const delivery=Number.isFinite(before.vtDelivered)&&Number.isFinite(after.vtDelivered)?` Delivered tidal volume ${before.vtDelivered.toFixed(0)} → ${after.vtDelivered.toFixed(0)} mL.`:'';
   const changes=`Aerated tissue ${signed(a)} percentage points; driving pressure ${signed(d)} cmH2O;${compliance} distension proxy ${signed(h)} percentage points.${delivery}`;
+  const volumeKnown=Number.isFinite(before.vtDelivered)&&Number.isFinite(after.vtDelivered);
+  const volumeChanged=volumeKnown&&Math.abs(after.vtDelivered-before.vtDelivered)>VT_DISPLAY_TOLERANCE_ML;
+  const dpWord=d<-.5?'falls':d>.5?'rises':'changes little';
   let meaning;
   if(a>1 && h>1)meaning='More tissue is aerated, while more aerated tissue also crosses the assumed distension threshold. This is a recruitment–distension tradeoff.';
+  else if(a<-1){
+    const distension=h>1?'the distension proxy rises, so lost aeration does not exclude increased regional distension':h<-1?'the distension proxy falls':'the distension proxy changes little';
+    meaning=`Aerated tissue is lost (derecruitment in this model), and ${distension}. Driving pressure ${dpWord}; interpret this elastic pressure alongside how much tissue remains aerated.`;
+  }
   else if(a<=1 && h>1)meaning='There is little additional aeration, while the distension proxy increases. In this model, the adjustment mainly adds load to the aerated lung.';
-  else if(a>1 && d<-.5 && h<=1)meaning='More tissue aerates and the global elastic pressure requirement falls, with little change in the distension proxy. These mechanical changes are consistent with recruitment benefit within this model.';
+  else if(a>1 && d<-.5 && h<=1 && volumeKnown && !volumeChanged)meaning='More tissue aerates and driving pressure falls at similar delivered volume, with little change in the distension proxy. This describes a mechanical change in the model; it does not establish clinical benefit.';
+  else if(a>1 && h<=1)meaning='More tissue is aerated, with little change in the distension proxy. Interpret this together with delivered volume and pressure.';
   else meaning='The metrics change in different ways or only slightly. Assess aeration, delivered volume, elastic pressure and distension together rather than judging one number alone.';
-  if(before.limited||after.limited)meaning+=' The pressure ceiling limits delivered tidal volume in at least one comparison state, so interpret compliance and pressure changes alongside the reduced delivered volume.';
+  if(volumeChanged)meaning+=` Delivered tidal volume differs by more than ${VT_DISPLAY_TOLERANCE_ML} mL, so a driving-pressure change is not a like-for-like comparison at equal volume. Read pressure and respiratory compliance alongside the actual delivered volume and distension.`;
+  if(before.limited||after.limited)meaning+=' The pressure ceiling was reached in at least one comparison state. Compare requested and delivered tidal volume; reduced delivered volume changes the pressure interpretation.';
   return {changes,meaning,pressure:`At inspiration: airway ${after.pplat.toFixed(1)} − mean pleural ${after.meanPleuralEI.toFixed(1)} = mean transpulmonary ${after.transpulmonaryEI.toFixed(1)} cmH2O. Pleural pressure changes ${(after.meanPleuralEI-after.meanPleuralEE).toFixed(1)} cmH2O within the displayed breath.`,scope:'This explains a model response; it does not select a clinically optimal PEEP or establish treatment benefit.'};
 }
 

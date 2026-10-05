@@ -6,7 +6,7 @@ This project is portable to a Mac mini or Windows PC. No remote connection to ei
 2. Run `npm ci`, `npm test`, and `npm start` in the project folder.
 3. Open http://127.0.0.1:5173 and run the device benchmark.
 4. Install/open Codex in this folder and give it `docs/CODEX_NEXT_TASK.md`. `.codex/config.toml` requests `gpt-6.1-sol` with `high` reasoning. Verify the selected model in the local client; this file does not change the model of an existing ChatGPT conversation.
-5. Open Claude Code in the same folder. Select the requested Opus 5.5/high configuration if your account offers it, and provide `docs/CLAUDE_REVIEW_BRIEF.md`. That independent review has not yet been performed.
+5. Open Claude Code in the same folder. Select the requested Opus 5.5/high configuration if your account offers it, and provide `docs/CLAUDE_REVIEW_BRIEF.md`. The initial Opus 5.5 / High source review and planning consultation are recorded in docs/CLAUDE_OPUS_REVIEW.md and docs/CLAUDE_REVIEW_DECISIONS.md. Review the implemented physiology extensions again before claiming readiness.
 6. Have Codex assess the review findings, fix substantive issues, rerun numerical checks and browser QA, and update the report.
 
 ## Publish to the requested repository

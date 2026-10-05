@@ -45,6 +45,14 @@ The final-breath EE snapshot is taken before inspiration; EI is after inspiratio
 - Intratidal aeration gain: sum w*max(f_EI-f_EE,0). Internal field `cyclic` is a proxy and does not independently establish the amount of expiratory closure.
 - High volume-ratio tissue: sum w*f_EI for units whose fully open EI volume / fully open volume at TP=5 cmH2O exceeds 1.65. This is an assumed distension proxy, not conventional excess strain deltaV/Vref or a validated injury threshold.
 - Perfusion-weighted closed fraction: sum w*(0.5+d)*(1-f_EE) divided by total proxy perfusion weight. It is not physiological shunt and predicts no PaO2/SpO2.
-- `volumeError`: delivered minus prescribed VT; pressure limitation can make this intentionally nonzero. `volumeResidual`: EI volume minus the final effective solver target. Small residuals establish algebraic consistency, not mass/energy conservation of a whole-body model.
+- `volumeError`: delivered minus prescribed VT; pressure limitation can make this intentionally nonzero. `volumeResidual`: EI volume minus the final effective solver target. In ceiling-constrained breaths this is a re-solve at the same effective pressure; it is not an independent mass-balance check. Small residuals establish algebraic consistency, not mass/energy conservation of a whole-body model.
 
 See the benchmark report for measured timestep sensitivity and seed variability. Clinical calibration and external validation remain future work.
+
+## Accepted comparison state and display semantics
+
+The worker computes fresh or retained-state candidates using unchanged equations. Retained candidates clone the last result acknowledged by the UI; discarded runs do not mutate the accepted history. A configuration change requires fresh patients. Sweep/benchmark runs remain independent. The app binds baseline capture to an explicit lesson request and cancels it on a pending input change.
+
+The internal limited flag records that at least one final-breath inspiratory ramp target exceeded the volume attainable at the pressure ceiling (by the existing 1e-5 mL numerical tolerance). It is not independently a flag for reduced final VT; compare vtDelivered with targetVT. The UI describes ceiling activation accordingly. The 1 mL interpretation tolerance is a separate display choice, not this solver tolerance or a clinical cutoff.
+
+Ascending and descending sweeps retain sequential recruitment history. The top PEEP receives another ten breaths when the descending sequence starts. The current plot separates inspiratory and expiratory paths instead of drawing a fabricated release path. The next trajectory increment will record instantaneous elastic release explicitly; no resisted-flow solution is present.

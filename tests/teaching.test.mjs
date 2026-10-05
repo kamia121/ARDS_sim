@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {explainComparison,explainAdjustment,LESSONS} from '../src/teaching.js';
+import {explainComparison,explainAdjustment,LESSONS,VT_DISPLAY_TOLERANCE_ML} from '../src/teaching.js';
 import {createPatient,simulate} from '../src/engine.js';
 test('A compliance improvement does not conceal an increased distension proxy',()=>{
   const before={openEE:.4,dp:15,over:.1};
@@ -37,4 +37,38 @@ test('Rate explanation uses recruitment exposure time without claiming resisted 
   const x=explainAdjustment({peep:8,vt:6,rr:20},{peep:8,vt:6,rr:30});
   assert.match(x.why,/one-third/);
   assert.match(x.tradeoff,/does not calculate resisted airflow/);
+});
+
+const pressure={pplat:20,meanPleuralEI:5,meanPleuralEE:3,transpulmonaryEI:15,limited:false};
+test('Substantial aeration loss is explained as derecruitment with distension context',()=>{
+  const x=explainComparison({openEE:.6,dp:12,over:.1,vtDelivered:420},{...pressure,openEE:.5,dp:14,over:.2,vtDelivered:420});
+  assert.match(x.changes,/-10\.0 percentage points/);
+  assert.match(x.meaning,/Aerated tissue is lost/);
+  assert.match(x.meaning,/distension proxy rises/);
+  assert.doesNotMatch(x.meaning,/benefit|should|recommend/i);
+});
+test('Lower driving pressure with decreased delivered volume is not a like-for-like comparison',()=>{
+  const x=explainComparison({openEE:.5,dp:16,over:.1,crs:26,vtDelivered:420},{...pressure,openEE:.56,dp:10,over:.1,crs:30,vtDelivered:300});
+  assert.match(x.changes,/Delivered tidal volume 420 → 300 mL/);
+  assert.match(x.meaning,/not a like-for-like comparison at equal volume/);
+  assert.doesNotMatch(x.meaning,/recruitment benefit/);
+});
+test('Equal-volume recruitment avoids clinical-benefit language',()=>{
+  const x=explainComparison({openEE:.5,dp:16,over:.1,vtDelivered:420},{...pressure,openEE:.6,dp:12,over:.1,vtDelivered:420.5});
+  assert.match(x.meaning,/similar delivered volume/);
+  assert.match(x.meaning,/does not establish clinical benefit/);
+  assert.doesNotMatch(x.meaning,/not a like-for-like/);
+  assert.doesNotMatch(x.meaning,/consistent with recruitment benefit/);
+});
+test('Baseline-only pressure limitation keeps the ceiling caveat',()=>{
+  const x=explainComparison({openEE:.5,dp:20,over:.1,vtDelivered:300,limited:true},{...pressure,openEE:.5,dp:14,over:.1,vtDelivered:420});
+  assert.match(x.meaning,/pressure ceiling was reached/);
+});
+
+test('display-volume tolerance boundary is explicit and does not claim equivalence when volume is missing',()=>{
+ const before={openEE:.5,dp:16,over:.1,vtDelivered:420};
+ const after={...pressure,openEE:.6,dp:12,over:.1,vtDelivered:420+VT_DISPLAY_TOLERANCE_ML};
+ assert.doesNotMatch(explainComparison(before,after).meaning,/not a like-for-like/);
+ assert.match(explainComparison(before,{...after,vtDelivered:after.vtDelivered+.01}).meaning,/not a like-for-like/);
+ assert.doesNotMatch(explainComparison({...before,vtDelivered:undefined},{...after,vtDelivered:undefined}).meaning,/at similar delivered volume/);
 });

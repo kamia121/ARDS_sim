@@ -33,6 +33,8 @@ The browser has its own device benchmark and JSON export. The static release is 
 - [Recorded benchmarks](docs/BENCHMARK_REPORT.md)
 - [Next Codex task and remaining requirements](docs/CODEX_NEXT_TASK.md)
 - [Mac/Windows and GitHub handoff](docs/LOCAL_HANDOFF.md)
+- [Reviewed development plan](docs/DEVELOPMENT_PLAN.md)
+- [Accepted Claude findings](docs/CLAUDE_REVIEW_DECISIONS.md)
 - [Independent Claude review brief](docs/CLAUDE_REVIEW_BRIEF.md)
 
 Runtime code is original and has no production dependencies. Explain was tested separately as an upstream reference; it is not bundled in this release. The app contains no clinical records. MIT license.

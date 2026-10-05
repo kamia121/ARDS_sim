@@ -1,6 +1,6 @@
 # Recorded benchmark report
 
-Recorded 2026-10-05T18:18:00.392Z. Raw samples and environment are in `benchmarks/results-engine.json`, `results-browser.json`, and `results-explain.json`. These are performance and numerical-verification results, not clinical validation.
+Recorded 2026-10-05T18:18:00.392Z. Raw samples and environment are in `benchmarks/results-engine.json`, `results-browser-linux-baseline.json`, and `results-explain.json`. These are performance and numerical-verification results, not clinical validation.
 
 ## Runtime
 
@@ -42,8 +42,12 @@ To reproduce, clone https://github.com/explain-labs/explain-engine outside this 
 
 No CT, EIT, patient PV/recruitment curves, waveform dataset or experimental measurements calibrated this release. Plausible trends and small algebraic residuals do not close that gap. Next: choose a licensed adult dataset, define recruitment/volume/pressure targets and uncertainty before fitting, hold out patients or experiments for evaluation, compare a simpler global model, and report prediction errors across PEEP, dwell times and tidal volumes. Coupling to a whole-body engine should receive its own integration benchmarks and validation.
 
-Independent Claude review is pending. Re-run the included device benchmark on the Mac mini and Windows PC and retain separate reports.
+The initial Claude source review and planning consultation are now recorded in CLAUDE_REVIEW_DECISIONS.md; review of expanded physiology remains future work. Re-run the included device benchmark on the Mac mini and Windows PC and retain separate reports.
 
 ## Local interface verification, 2026-10-05
 
-The earlier Linux measurements above are retained in `benchmarks/results-browser-linux-baseline.json`; the current `benchmarks/results-browser.json` records the new local browser run. Host: macOS arm64, Node v24.4.0, headless Chromium 151.0.7922.34. The CPU identifier was unavailable under sandbox permissions; browser-reported processor count and user agent are in the raw result. Seven paired worker/DOM resets had median 20.5 ms and P95 22 ms. These are local execution measurements, not physiological or learner validation. Both light and dark themes were checked at 320, 390 and 1280 CSS-pixel widths; the 17 teaching checks are recorded separately in `benchmarks/results-teaching-browser.json`. No Windows or physical mobile benchmark was performed in this continuation.
+The earlier Linux measurements above are retained in `benchmarks/results-browser-linux-baseline.json`; `benchmarks/results-browser-learner-checkpoint.json` records that learner/theme checkpoint browser run. Host: macOS arm64, Node v24.4.0, headless Chromium 151.0.7922.34. The CPU identifier was unavailable under sandbox permissions; browser-reported processor count and user agent are in the raw result. Seven paired worker/DOM resets had median 20.5 ms and P95 22 ms. These are local execution measurements, not physiological or learner validation. Both light and dark themes were checked at 320, 390 and 1280 CSS-pixel widths; the 17 checkpoint teaching checks are retained in `benchmarks/results-teaching-browser-learner-checkpoint.json`. No Windows or physical mobile benchmark was performed in this continuation.
+
+## Post-review integration verification, 2026-10-05
+
+Current results-browser.json records nine passing browser checks with seven paired worker/DOM samples (median 18.8 ms; P95 21.6 ms). Current results-teaching-browser.json records 24 learner-interface checks. Both reports include checkpoint, script and source SHA256 provenance; previews were inspected. Results-state-regression.json verifies 24 complete simulation outputs and final patient states against checkpoint ddd3980, with no numerical differences. MODEL_SPEC.md clarifies that ceiling activation and reduced final delivery are distinct, and the ceiling-constrained residual is an algebraic re-solve. These checks do not establish clinical validity or actual learner usability.

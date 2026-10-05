@@ -1,8 +1,9 @@
 import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
-let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,phase='ee',timer,positions={};
-let baseline=null,baselineConfig=null,pendingBaseline=true,comparisonFresh=true,baselineRequest=0,comparisonConfig=null;
+let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,benchmarkId=0,phase='ee',timer,positions={};
+let baseline=null,baselineConfig=null,pendingBaseline=false,comparisonFresh=true,baselineRequest=0,comparisonConfig=null,baselineExpected=null,compareContext=null,acceptedStateToken=null,acceptedConfig=null;
+const selectedUnits={a:null,b:null};
 const colors={};
 function refreshColors(){const css=getComputedStyle(document.documentElement);for(const [key,token] of Object.entries({a:'--mon-current',b:'--mon-snap',open:'--open',cyclic:'--cyclic',over:'--over',closed:'--closed',surface:'--surface-2',grid:'--mon-grid'}))colors[key]=css.getPropertyValue(token).trim();}
 refreshColors();
@@ -11,8 +12,26 @@ const pct=x=>fmt(x*100)+'%';
 function settings(){return {peep:+$('peep').value,vt:+$('vt').value,rr:+$('rr').value,pressureLimit:45};}
 function config(){return ['a','b'].map(k=>({kind:$('kind-'+k).value,seed:Number($('seed-'+k).value)>>>0,pbw:+$('pbw').value}));}
 function labels(){for(const k of ['peep','vt','rr','pbw'])$(k+'-value').textContent=$(k).value;}
-function compare(reset=false){comparisonFresh=reset||$('guided-mode').checked;labels();$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();$('status').textContent='Simulating 10 breaths in each patient...';compareId=++request;comparisonConfig=JSON.stringify(config());if(pendingBaseline)baselineRequest=compareId;worker.postMessage({id:compareId,type:'compare',config:config(),settings:settings(),reset:comparisonFresh});}
-function schedule(reset=false){clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
+function clearComparison(){ $('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren(); }
+function invalidateComparison(configurationChanged=false){
+  compareId=++request;compareContext=null;clearComparison();
+  if(pendingBaseline||configurationChanged){
+    pendingBaseline=false;baseline=null;baselineConfig=null;baselineExpected=null;baselineRequest=0;
+    $('apply-adjustment').disabled=true;
+    $('baseline-status').textContent=configurationChanged?'Patient configuration changed. Set a new lesson baseline before interpreting differences.':'Baseline preparation interrupted. Set the lesson baseline again before applying its adjustment.';
+  }
+  $('status').textContent='Settings changed; awaiting a completed simulation.';
+  for(const k of ['a','b'])$('patient-'+k).setAttribute('aria-busy','true');
+}
+function compare(reset=false,recordBaseline=false){
+  comparisonFresh=reset||$('guided-mode').checked||acceptedStateToken===null||acceptedConfig!==JSON.stringify(config());labels();clearComparison();
+  $('status').textContent='Simulating 10 breaths in each patient...';$('status').removeAttribute('role');
+  compareId=++request;const currentConfig=config(),currentSettings=settings();comparisonConfig=JSON.stringify(currentConfig);
+  compareContext={id:compareId,config:comparisonConfig,settings:currentSettings,fresh:comparisonFresh};
+  if(recordBaseline){baselineRequest=compareId;baselineExpected={...compareContext,lesson:$('lesson').value};}
+  worker.postMessage({id:compareId,type:'compare',config:currentConfig,settings:currentSettings,reset:comparisonFresh,baseStateToken:acceptedStateToken});
+}
+function schedule(reset=false,configurationChanged=false){invalidateComparison(configurationChanged);clearTimeout(timer);timer=setTimeout(()=>compare(reset),130);}
 function metric(label,value,unit='',secondary=false,helpKey=''){
   const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');
   const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);
@@ -33,14 +52,14 @@ function updateMetrics(k,result){
   let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';const summary=document.createElement('summary');summary.textContent='Additional model measures';advanced.append(summary);const values=document.createElement('div');values.className='metrics';advanced.append(values);patient.append(advanced);}
   advanced.querySelector('.metrics').replaceChildren(metric('Intratidal aeration gain',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
   const delivery=$('delivery-'+k);delivery.className='delivery'+(m.limited?' limited':'');
-  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?'45 cmH2O pressure ceiling limited delivery.':'');
+  delivery.textContent=`VT ${fmt(m.vtDelivered)} / ${fmt(result.targetVT??settings().vt*+$('pbw').value)} mL delivered. `+(m.limited?`${fmt(result.settings.pressureLimit)} cmH2O pressure ceiling reached during inspiration; check actual delivered volume.`:'');
   if(m.limited)delivery.setAttribute('role','alert');else delivery.removeAttribute('role');
 }
 function renderTeaching(){
   const output=$('comparison-explanation');output.replaceChildren();$('adjustment-explanation').replaceChildren();
   if(!baseline||!lastResults)return;
   if(comparisonConfig!==baselineConfig||JSON.stringify(config())!==baselineConfig){$('baseline-status').textContent='Patient configuration changed. Set a new baseline before interpreting differences.';return;}
-  if(!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
+  if(!comparisonFresh||!$('guided-mode').checked){$('baseline-status').textContent='Pressure-history mode: recruitment state is retained. Use fresh patients for a controlled comparison.';return;}
   const adjustment=explainAdjustment(baseline[0].settings,lastResults[0].settings);
   $('baseline-status').textContent='Comparing the recorded baseline with the last completed simulation.';
   for(const [key,label] of [['changed','What changed'],['held','What stayed the same'],['why','Why the model responds'],['tradeoff','Tradeoff to recognize'],['control','Comparison conditions']]){
@@ -63,7 +82,7 @@ function setLessonBaseline(){
   for(const [key,value] of Object.entries(lesson.baseline))$(key).value=value;
   for(const [i,k] of ['a','b'].entries()){$('kind-'+k).value=lesson.kinds[i];$('seed-'+k).value=13791;}
   $('guided-mode').checked=true;updateLesson();$('apply-adjustment').disabled=true;
-  pendingBaseline=true;baseline=null;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();invalidateSweep();clearTimeout(timer);compare(true);
+  pendingBaseline=true;baseline=null;baselineExpected=null;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();invalidateSweep();clearTimeout(timer);compare(true,true);
 }
 $('set-baseline').addEventListener('click',setLessonBaseline);
 $('lesson').addEventListener('change',setLessonBaseline);
@@ -74,7 +93,7 @@ $('apply-adjustment').addEventListener('click',()=>{
   for(const [key,value] of Object.entries(LESSONS[$('lesson').value].adjustment))$(key).value=value;
   invalidateSweep();clearTimeout(timer);compare(true);
 });
-$('guided-mode').addEventListener('change',()=>{clearTimeout(timer);compare();});
+$('guided-mode').addEventListener('change',()=>{invalidateComparison();clearTimeout(timer);compare();});
 function drawMap(k,result){
   const canvas=$('map-'+k),width=canvas.clientWidth,height=canvas.clientHeight,dpr=window.devicePixelRatio||1;
   canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,width,height);
@@ -95,13 +114,26 @@ function drawMap(k,result){
     if(state==='cyclic'){ctx.globalAlpha=1;ctx.strokeStyle=colors.cyclic;ctx.lineWidth=.7;ctx.stroke();}
     positions[k].push({x,y,u,state});
   });ctx.globalAlpha=1;
-  canvas.setAttribute('aria-label',`Patient ${k.toUpperCase()}: ${phase==='ee'?'end expiration':'end inspiration'}. Aerated fraction ${pct(phase==='ee'?result.metrics.openEE:result.metrics.openEI)}, high strain at inspiration ${pct(result.metrics.over)}. Schematic distribution; select a unit for details.`);
+  canvas.setAttribute('aria-label',`Patient ${k.toUpperCase()}: ${phase==='ee'?'end expiration':'end inspiration'}. Aerated fraction ${pct(phase==='ee'?result.metrics.openEE:result.metrics.openEI)}, distension proxy at inspiration ${pct(result.metrics.over)}. Schematic distribution; select a unit for details.`);
 }
-for(const k of ['a','b'])$('map-'+k).addEventListener('click',event=>{
-  const rect=event.currentTarget.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
-  const nearest=positions[k]?.reduce((best,p)=>((p.x-x)**2+(p.y-y)**2)<best.distance?{...p,distance:(p.x-x)**2+(p.y-y)**2}:best,{distance:Infinity});
-  if(nearest?.u&&nearest.distance<500){const u=nearest.u;$('unit-'+k).textContent=`Unit ${u.id}: open ${pct(u.openEE)} at expiration / ${pct(u.openEI)} at inspiration. Volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`;}
-});
+function updateUnitDetail(k,result){
+  const id=selectedUnits[k],u=id===null?null:result?.units.find(unit=>unit.id===id);
+  const text=u?`Unit ${u.id}: open ${pct(u.openEE)} before inspiration / ${pct(u.openEI)} at end inspiration. Fully open volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`:'Select a lung unit on the map or enter its number to inspect the current result.';
+  if($('unit-'+k).textContent!==text)$('unit-'+k).textContent=text;
+}
+for(const [i,k] of ['a','b'].entries()){
+  $('map-'+k).addEventListener('click',event=>{
+    const rect=event.currentTarget.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
+    const nearest=positions[k]?.reduce((best,p)=>((p.x-x)**2+(p.y-y)**2)<best.distance?{...p,distance:(p.x-x)**2+(p.y-y)**2}:best,{distance:Infinity});
+    if(nearest?.u&&nearest.distance<500){selectedUnits[k]=nearest.u.id;$('unit-select-'+k).value=nearest.u.id;updateUnitDetail(k,lastResults?.[i]);}
+  });
+  $('unit-select-'+k).addEventListener('input',()=>{
+    const value=$('unit-select-'+k).value,id=Number(value);
+    if(value!==''&&Number.isInteger(id)&&lastResults?.[i].units.some(u=>u.id===id)){selectedUnits[k]=id;updateUnitDetail(k,lastResults[i]);}
+    else if(value===''){selectedUnits[k]=null;updateUnitDetail(k,lastResults?.[i]);}
+    else $('unit-'+k).textContent='Enter a whole-number unit from 0 to 511.';
+  });
+}
 const NS='http://www.w3.org/2000/svg';
 function svgEl(tag,attrs={},text){const e=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,String(v)));if(text!=null)e.textContent=text;return e;}
 function baseChart(svg,xDomain,yDomain,xLabel,yLabel){
@@ -132,7 +164,7 @@ function drawPV(){
   const xmin=Math.max(0,Math.floor(Math.min(...points.map(p=>p.volume))/250)*.25-.1),xmax=Math.ceil(Math.max(...points.map(p=>p.volume))/250)*.25+.1;
   const ymax=Math.max(30,Math.ceil(Math.max(...points.map(p=>p.pressure))/5)*5+5);
   const s=baseChart(svg,[xmin,xmax],[0,ymax],'Total gas volume (L)','Airway pressure (cmH2O)');
-  lastResults.forEach((r,i)=>line(svg,r.pv.map(p=>({x:p.volume/1000,y:p.pressure})),s,i?colors.b:colors.a));
+  lastResults.forEach((r,i)=>{for(const phase of ['inflation','deflation'])line(svg,r.pv.filter(p=>p.phase===phase).map(p=>({x:p.volume/1000,y:p.pressure})),s,i?colors.b:colors.a);});
 }
 function drawSweep(){
   const svg=$('sweep-chart'),s=baseChart(svg,[4,24],[0,100],'PEEP (cmH2O)','Tissue fraction (%)');
@@ -142,47 +174,54 @@ function drawSweep(){
     line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c);
     line(svg,r.ascending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.over*100})),s,c,'6 4');
     line(svg,r.descending.filter(p=>p.peep>=4).map(p=>({x:p.peep,y:p.openEE*100})),s,c,'2 4',.4);
+    for(const p of r.ascending.filter(p=>p.peep>=4&&p.limited))svg.append(svgEl('circle',{cx:s.x(p.peep),cy:s.y(p.openEE*100),r:5,fill:'none',stroke:'#E8B962','stroke-width':2},null));
   });
-  svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending high-strain tissue; faint dotted lines show descending aeration. Patient A green, Patient B blue.');
+  svg.setAttribute('aria-label','PEEP sweep: solid lines show ascending aerated tissue; dashed lines show ascending distension proxy; faint dotted lines show descending aeration. Patient A green, Patient B blue. Outlined markers indicate inspiratory pressure-ceiling exposure.');
 }
-function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i]);});drawPV();}drawSweep();}
+function render(){if(lastResults){['a','b'].forEach((k,i)=>{updateMetrics(k,lastResults[i]);drawMap(k,lastResults[i]);updateUnitDetail(k,lastResults[i]);});drawPV();}drawSweep();}
 worker.onmessage=({data})=>{
   if(data.type==='compare'){
-    if(data.id!==compareId)return;lastResults=data.results;window.ardsResults=lastResults;
-    $('status').textContent=`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: 45 cmH2O.`;
-    if(pendingBaseline&&data.id===baselineRequest){baseline=structuredClone(lastResults);baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${baseline[0].settings.peep} cmH2O, VT ${baseline[0].settings.vt} mL/kg PBW, respiratory rate ${baseline[0].settings.rr}/min. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
+    if(data.id!==compareId||compareContext?.id!==data.id)return;
+    if(JSON.stringify(data.config)!==compareContext.config||compareContext.config!==JSON.stringify(config())||JSON.stringify(compareContext.settings)!==JSON.stringify(settings()))return;
+    acceptedStateToken=data.stateToken;acceptedConfig=compareContext.config;worker.postMessage({id:data.stateToken,type:'accept-state'});
+    lastResults=data.results;window.ardsResults=lastResults;comparisonFresh=compareContext.fresh;
+    for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');
+    $('status').textContent=`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Pressure ceiling: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
+    if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value){baseline=structuredClone(lastResults);baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent=`Baseline recorded: PEEP ${baseline[0].settings.peep} cmH2O, VT ${baseline[0].settings.vt} mL/kg PBW, respiratory rate ${baseline[0].settings.rr}/min. Apply the adjustment, then compare the model responses below.`;$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
     render(); window.ardsRenderCounter=(window.ardsRenderCounter||0)+1;
     const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
   }else if(data.type==='sweep'){
     if(data.id!==sweepId)return;lastSweep=data.results;window.ardsSweep=lastSweep;drawSweep();$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';
-    $('sweep-caption').textContent='A green / B blue. Solid: ascending aerated fraction. Dashed: ascending high-strain fraction. Faint dotted: descending aeration. Fresh seeded patients; 10 breaths per PEEP step; active state preserved.';
-  }else if(data.type==='benchmark-progress'){$('benchmark-status').textContent=data.message;}
+    $('sweep-caption').textContent='A green / B blue. Solid: ascending aerated fraction. Dashed: ascending distension proxy. Outlined markers: inspiratory pressure ceiling reached; final delivery may differ. Faint dotted: descending aeration. Fresh seeded patients; 10 breaths per PEEP step; active state preserved.';
+  }else if(data.type==='benchmark-progress'){if(data.id===benchmarkId)$('benchmark-status').textContent=data.message;}
   else if(data.type==='benchmark'){
-    deviceResults=data.results;window.ardsBenchmark=deviceResults;$('benchmark-rows').replaceChildren();
+    if(data.id!==benchmarkId)return;deviceResults=data.results;window.ardsBenchmark=deviceResults;$('benchmark-rows').replaceChildren();
     for(const r of deviceResults.rows){const row=document.createElement('tr');for(const v of [r.units,fmt(r.medianMs,1)+' ms',fmt(r.p95Ms,1)+' ms',fmt(r.realTimeFactor,1)+'x']){const td=document.createElement('td');td.textContent=v;row.append(td);}$('benchmark-rows').append(row);}
     $('benchmark-status').textContent=`Completed ${new Date(deviceResults.date).toLocaleString()}. Seven timed runs per size; engine only.`;$('run-benchmark').disabled=false;$('export-benchmark').disabled=false;
   }else if(data.type==='error'){
-    const target=data.requestType==='benchmark'?'benchmark-status':'status';$(target).textContent='Simulation error: '+data.message;$(target).setAttribute('role','alert');$('sweep').disabled=false;$('run-benchmark').disabled=false;
+    const currentId=data.requestType==='benchmark'?benchmarkId:data.requestType==='sweep'?sweepId:data.requestType==='compare'?compareId:null;if(data.id!==currentId)return;
+    if(data.requestType==='compare'){pendingBaseline=false;$('apply-adjustment').disabled=true;for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');}
+    const target=data.requestType==='benchmark'?'benchmark-status':'status';$(target).textContent='Simulation error: '+data.message;$(target).setAttribute('role','alert');if(data.requestType==='sweep'){$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';}if(data.requestType==='benchmark')$('run-benchmark').disabled=false;
   }
 };
 worker.onerror=event=>{$('status').textContent='The simulation could not load: '+event.message;$('status').setAttribute('role','alert');};
 function invalidateSweep(){lastSweep=null;sweepId=0;window.ardsSweep=null;$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';$('sweep-caption').textContent='Run a fresh standardized sweep for these settings.';drawSweep();}
 for(const k of ['peep','vt','rr'])$(k).addEventListener('input',()=>{if(k!=='peep')invalidateSweep();labels();schedule();});
-$('pbw').addEventListener('input',()=>{invalidateSweep();labels();schedule(true);});
+$('pbw').addEventListener('input',()=>{invalidateSweep();labels();schedule(true,true);});
 for(const k of ['a','b'])for(const type of ['kind','seed'])$(type+'-'+k).addEventListener('change',()=>{
   const seed=$('seed-'+k);if(!Number.isFinite(Number(seed.value))||Number(seed.value)<0||Number(seed.value)>4294967295)seed.value=k==='a'?13791:14602;
-  invalidateSweep();schedule();
+  invalidateSweep();schedule(false,true);
 });
 for(const p of ['ee','ei'])$(p).addEventListener('click',()=>{phase=p;for(const q of ['ee','ei'])$(q).setAttribute('aria-pressed',String(q===p));render();});
-$('reset').addEventListener('click',()=>{clearTimeout(timer);invalidateSweep();compare(true);});
-$('new-seeds').addEventListener('click',()=>{const seeds=new Uint32Array(2);crypto.getRandomValues(seeds);$('seed-a').value=seeds[0];$('seed-b').value=seeds[1];invalidateSweep();compare(true);});
+$('reset').addEventListener('click',()=>{invalidateComparison();clearTimeout(timer);invalidateSweep();compare(true);});
+$('new-seeds').addEventListener('click',()=>{const seeds=new Uint32Array(2);crypto.getRandomValues(seeds);invalidateComparison(true);$('seed-a').value=seeds[0];$('seed-b').value=seeds[1];invalidateSweep();compare(true);});
 $('share').addEventListener('click',async()=>{
   const url=new URL(location.href);url.search='';for(const k of ['peep','vt','rr','pbw','kind-a','kind-b','seed-a','seed-b'])url.searchParams.set(k,$(k).value);
   try{await navigator.clipboard.writeText(url.href);$('status').textContent='Scenario link copied. It recreates the seeds and settings from fresh state; pressure history is not included.';}
   catch{window.prompt('Copy this scenario link. It starts from fresh state.',url.href);}
 });
 $('sweep').addEventListener('click',()=>{$('sweep').disabled=true;$('sweep').textContent='Sweeping...';sweepId=++request;worker.postMessage({id:sweepId,type:'sweep',config:config(),settings:settings()});});
-$('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;worker.postMessage({id:++request,type:'benchmark'});});
+$('run-benchmark').addEventListener('click',()=>{$('run-benchmark').disabled=true;benchmarkId=++request;worker.postMessage({id:benchmarkId,type:'benchmark'});});
 $('export-benchmark').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(deviceResults,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='ARDS-Sim-device-benchmark.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 const tabs=[...document.querySelectorAll('[role=tab]')];
 function selectTab(tab){for(const t of tabs){const active=t===tab;t.classList.toggle('active',active);t.setAttribute('aria-selected',String(active));$(t.getAttribute('aria-controls')).hidden=!active;}if(tab.id==='tab-explore')render();}
@@ -191,7 +230,7 @@ window.addEventListener('resize',()=>{clearTimeout(window.ardsResize);window.ard
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}
 for(const k of ['a','b']){const kind=params.get('kind-'+k);if(['high','low','wall','healthy'].includes(kind))$('kind-'+k).value=kind;const seed=Number(params.get('seed-'+k));if(params.has('seed-'+k)&&Number.isInteger(seed)&&seed>=0&&seed<=4294967295)$('seed-'+k).value=seed;}
-labels();drawSweep();if(params.size){updateLesson();compare(true);}else setLessonBaseline();
+labels();drawSweep();if(params.size){updateLesson();$('baseline-status').textContent='Custom scenario loaded. Set the lesson baseline to begin its guided comparison.';compare(true);}else setLessonBaseline();
 
 const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
 function currentTheme(){return document.documentElement.dataset.theme|| (themeMedia.matches?'dark':'light');}

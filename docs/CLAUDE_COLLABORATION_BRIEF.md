@@ -27,4 +27,4 @@ Codex critically evaluates findings, records accepted/rejected recommendations a
 
 ## Status
 
-The user explicitly authorized repository transmission to Claude and integration/merging/commits on 2026-10-05. The initial read-only Opus consultation is in progress. This brief is not a Claude result; findings will be recorded after model identity and output are verified.
+The user explicitly authorized transmission, integration/merging and commits on 2026-10-05. Opus 5.5 / High completed the read-only source review and a planning follow-up; Sonnet 5.5 / High and Medium completed disjoint coding assignments. Codex critically assessed, revised and verified their changes. See DEVELOPMENT_PLAN.md and CLAUDE_REVIEW_DECISIONS.md; raw model identity/usage/effort records and reports are in benchmarks/results-claude-consultation.json. The review is not validation of expanded physiology, which remains unimplemented.
