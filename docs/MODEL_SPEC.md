@@ -35,7 +35,7 @@ Mulberry32 provides repeatable sequential random samples. Dependency is uniform 
 
 The UI uses 512 regions, dt=0.1 s and ten breaths per update. Inspiratory volume rises linearly over one third of the cycle; the remaining time is quasi-static expiration at PEEP. Inspiration respects a PEEP pressure floor and a 45 cmH2O ceiling. Unattainable VT is reduced and explicitly reported. There is no dynamic flow waveform or true occlusion maneuver. End-inspiratory quasi-static pressure is displayed as plateau pressure.
 
-The final-breath EE snapshot is taken before inspiration; EI is after inspiration. State stored for the next call is after that breath's expiration. Updates retain state; reset recreates the seed. A copied scenario recreates fresh settings/seeds and omits history. Standard sweeps recreate fresh seeds and carry history through 4–24 cmH2O ascending and descending, ten breaths per step. Ten breaths are not a guarantee of steady state.
+The final-breath EE snapshot is taken before inspiration; EI is after inspiration. State stored for the next call is after that breath's expiration. The default guided mode recreates the same seeded initial state for each comparison. Unchecking fresh patients retains state across updates; reset recreates the seed. A copied scenario recreates fresh settings/seeds and omits history. Standard sweeps recreate fresh seeds and carry history through 4–24 cmH2O ascending and descending, ten breaths per step. Ten breaths are not a guarantee of steady state.
 
 ## Outputs and interpretation
 

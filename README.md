@@ -31,6 +31,7 @@ The browser has its own device benchmark and JSON export. The static release is 
 - [Model specification](docs/MODEL_SPEC.md)
 - [Engine comparison and decision](docs/ENGINE_DECISION.md)
 - [Recorded benchmarks](docs/BENCHMARK_REPORT.md)
+- [Next Codex task and remaining requirements](docs/CODEX_NEXT_TASK.md)
 - [Mac/Windows and GitHub handoff](docs/LOCAL_HANDOFF.md)
 - [Independent Claude review brief](docs/CLAUDE_REVIEW_BRIEF.md)
 

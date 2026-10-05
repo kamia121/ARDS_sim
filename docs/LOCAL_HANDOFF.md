@@ -5,7 +5,7 @@ This project is portable to a Mac mini or Windows PC. No remote connection to ei
 1. Extract the project and install Node.js 22 or newer.
 2. Run `npm ci`, `npm test`, and `npm start` in the project folder.
 3. Open http://127.0.0.1:5173 and run the device benchmark.
-4. Install/open Codex in this folder. `.codex/config.toml` requests `gpt-6.1-sol` with `high` reasoning. Verify the selected model in the local client; this file does not change the model of an existing ChatGPT conversation.
+4. Install/open Codex in this folder and give it `docs/CODEX_NEXT_TASK.md`. `.codex/config.toml` requests `gpt-6.1-sol` with `high` reasoning. Verify the selected model in the local client; this file does not change the model of an existing ChatGPT conversation.
 5. Open Claude Code in the same folder. Select the requested Opus 5.5/high configuration if your account offers it, and provide `docs/CLAUDE_REVIEW_BRIEF.md`. That independent review has not yet been performed.
 6. Have Codex assess the review findings, fix substantive issues, rerun numerical checks and browser QA, and update the report.
 
