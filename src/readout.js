@@ -3,6 +3,8 @@
 export function frameReadout(frame,kind,startVolume){
   const airflow=kind==='frozen-aeration-airflow';
   return [
+    {key:'external',label:'External body pressure',value:frame.externalPressure??0,unit:'cmH2O',note:'Assumed tank/body-surface pressure. Negative values act outside the chest; chest-load offset is separate.'},
+    {key:'drive',label:'Effective pressure drive',value:frame.transrespPressure??frame.pressure,unit:'cmH2O',note:'Airway minus external body pressure. This is the drive constrained by the model pressure limit.'},
     {key:'paw',label:'Airway · Paw',value:frame.pressure,unit:'cmH2O',note:airflow?'Airway-opening pressure includes resistance.':'No resistance in this mode; airway and alveolar pressure are equal.'},
     {key:'ppl',label:'Mean pleural · Ppl',value:frame.meanPleural,unit:'cmH2O',note:'Tissue-weighted model mean. Absolute pressure depends on the assumed pleural baseline and chest-wall recoil.'},
     {key:'pl',label:airflow?'Airway − pleural':'Lung-distending · PL',value:frame.pressure-frame.meanPleural,unit:'cmH2O',note:airflow?'Paw − mean Ppl includes resistance and is not alveolar transpulmonary pressure during flow.':'Model mean transpulmonary pressure = Paw − mean Ppl; not a clinical esophageal-pressure estimate.'},

@@ -3,29 +3,33 @@ export const PARAMETER_TABLE = {
   high: { capacity: 4600, rest: 900, stiffness: 17, pleural: 2, gradient: 5, ew: 0.006, reference: 1200, initial: 0.38 },
   low: { capacity: 4600, rest: 900, stiffness: 17, pleural: 2, gradient: 5, ew: 0.006, reference: 1200, initial: 0.38 },
   wall: { capacity: 4600, rest: 900, stiffness: 17, pleural: 7, gradient: 5, ew: 0.013, reference: 1200, initial: 0.38 },
-  healthy: { capacity: 3000, rest: 1500, stiffness: 12, pleural: 0.5, gradient: 2, ew: 0.01, reference: 2000, initial: 0.995 }
+  healthy: { capacity: 3000, rest: 1500, stiffness: 12, pleural: 0.5, gradient: 2, ew: 0.01, reference: 2000, initial: 0.995 },
+  healthyDependent: { capacity: 3000, rest: 1500, stiffness: 12, pleural: 0.5, gradient: 2, ew: 0.01, reference: 2000, initial: 0.995 }
 };
 const PARAMETERS = PARAMETER_TABLE;
 export const MODEL_INFO = Object.freeze({
-  name: 'Reduced adult regional lung model', version: '1.0.0',
+  name: 'Reduced adult regional lung model', version: '1.1.0',
   parameterRegimes: PARAMETER_TABLE,
   calibration: 'No adult CT, EIT, pressure-volume, recruitment, or outcome datasets were used for calibration or validation.',
-  distributions: { dependency: 'Uniform [0,1]', rawWeight: 'Uniform [0.7,1.3], normalized to total 1', capacityMultiplier: 'Uniform [0.75,1.25]', stiffnessMultiplier: 'Uniform [0.8,1.2]', difficultFraction: 'high/wall 0.08; low 0.68; healthy 0', openingThreshold: 'ARDS ordinary:6+15U+6dependency; difficult:38+20U; healthy:0.3+3U', closingThreshold: 'ARDS:0.5+6U+3dependency; healthy:-3+2U; constrained below opening threshold by at least0.5', openingTau: '0.35+1.2U seconds', closingTau: '1.3+3U seconds', recruitmentRate: 'threshold excess/(3+excess)/tau', initialRecruitment: 'ARDS:clamp(0.38+0.4*(0.5-dependency)+0.1*(U-0.5),0,1); healthy:0.995', perfusionWeight: 'tissueWeight*(0.5+dependency)', bodySize: 'Volumes and chest-wall reference scale with PBW/70; wall elastance scales inversely', random: 'Mulberry32 seeded pseudo-random samples; sequential Monte Carlo units' },
+  distributions: { dependency: 'Uniform [0,1]; fixed anatomical dorsal coordinate, initially supine-dependent', rawWeight: 'Uniform [0.7,1.3], normalized to total 1', capacityMultiplier: 'Uniform [0.75,1.25]', stiffnessMultiplier: 'Uniform [0.8,1.2]', difficultFraction: 'high/wall 0.08; low 0.68; healthy/healthyDependent 0', openingThreshold: 'ARDS ordinary:6+15U+6dependency; difficult:38+20U; healthy:0.3+3U', closingThreshold: 'ARDS:0.5+6U+3dependency; healthy:-3+2U; constrained below opening threshold by at least0.5', openingTau: '0.35+1.2U seconds', closingTau: '1.3+3U seconds', recruitmentRate: 'threshold excess/(3+excess)/tau', initialRecruitment: 'ARDS:clamp(0.38+0.4*(0.5-dependency)+0.1*(U-0.5),0,1); healthy:0.995', perfusionWeight: 'tissueWeight*(0.5+dependency)', bodySize: 'Volumes and chest-wall reference scale with PBW/70; wall elastance scales inversely', healthyDependentAdjustment: 'Same parameters and random draw sequence as healthy, then deterministic s=max(0,(dependency-0.6)/0.4): f=0.995-0.6s; openingThreshold+=1*s; closingThreshold=min(adjusted openingThreshold-0.5, healthy closingThreshold+3.5s)', random: 'Mulberry32 seeded pseudo-random samples; sequential Monte Carlo units' },
   purpose: 'Illustrative mechanics and pressure/time-dependent recruitment; not a clinical predictor or ventilator recommendation.',
   units: { pressure: 'cmH2O', volume: 'mL', time: 's', elastance: 'cmH2O/mL', vt: 'mL/kg predicted body weight' },
   assumptions: [
     'Passive patient; uniform airway pressure; no airway resistance, inertance, flow limitation, spontaneous effort, gas exchange, or vascular dynamics.',
     'Each regional unit represents a weighted tissue fraction; fractional recruitment f persists between calls. Functional aerated fractions are tissue-weighted, not unit counts.',
-    'Regional transpulmonary pressure equals airway pressure minus baseline pleural pressure, a dependent pleural gradient, and chest-wall elastance times gas volume above an explicitly assumed reference volume.',
+    'Regional transpulmonary pressure equals airway pressure minus baseline pleural pressure, a schematic pleural gradient across the fixed dorsal coordinate, and chest-wall elastance times gas volume above an explicitly assumed reference volume.',
     'Open-unit gas volume is weight times [rest volume + capacity*positive(TP)/(stiffness+positive(TP))]. This saturating law has decreasing compliance at positive TP; negative TP retains the assumed residual open-unit gas volume.',
     'Opening occurs only above popen; closure only below pclose. Distinct thresholds and finite first-order rates create pressure/time hysteresis. Rates approach inverse opening/closure time constants with increasing threshold excess.',
     'Volume control uses a prescribed linear inspiratory volume ramp over one-third of the cycle. Expiration is represented by instantaneous pressure reduction to PEEP followed by pressure-controlled state evolution; plotted PV curves are quasi-static paths, not realistic dynamic waveforms.',
     'Volume-control pressure is solved with recruitment coupled to the timestep. PEEP is the inspiratory pressure floor. A pressure ceiling explicitly reduces delivered volume whenever the target cannot be attained.',
     'The distension proxy is based on an assumed fully open regional gas-volume ratio Vopen(EI)/Vopen(TP=5) above 1.65 (not conventional excess strain deltaV/Vref) relative to each fully open region at TP=5 cmH2O. It is not a validated overdistension or injury threshold.',
-    'Closed perfusion is a perfusion-weighted closed tissue fraction proxy using a fixed dependent perfusion gradient; it is not a clinical shunt fraction.',
+    'Closed perfusion is a perfusion-weighted closed tissue fraction proxy using a fixed anatomical dorsal weighting; it does not reverse with posture and is not a clinical shunt fraction.',
     'Phenotypes are illustrative parameter regimes with seeded heterogeneity, not fitted adult clinical cohorts; no outcomes or sweep trends are prescribed.',
     'An optional linearCompliance field and fixedOpen recruitment flag exist solely for analytic numerical verification; default phenotypes use the nonlinear model.',
     'No surface-tension energy balance, recruitment energy, airway network, regional interactions beyond common chest-wall recoil, or patient-specific calibration of chest-wall reference volume is modeled.',
+    'The healthyDependent kind is an illustrative dependent-region variant of healthy: identical parameters and random draws, with the most dependent tissue (dependency above 0.6) given lower initial aeration and higher opening/closing thresholds. Its adjustment constants are assumed, not fitted to any clinical data, and do not claim that every healthy lung has partly closed dependent regions.',
+    'Optional experiments (src/experiments.js) transform a clone of the patient: a chest-load pleural offset added to baseline pleural pressure, and a prone mirrored/flattened pleural gradient that keeps the supine tissue-weighted mean pleural pressure at fixed gas volume and keeps anatomical dependency, thresholds and perfusion fixed. Prone gradient factor is an assumed schematic parameter, not a measured value, and no improvement is implied.',
+    'Negative-pressure external drive is an ideal uniform-transmission re-expression of the matched volume-control solution (no circulation, abdomen, leak or tank dynamics): airway pressure is 0, body-surface pressure is minus the original airway pressure, and transpulmonary pressure and regional states are identical. The pressure limit applies to the effective drive (default 45) and is not a calibrated tank-ventilator limit.',
     'Numerical resolution, timestep, prior recruitment state, respiratory rate, and sweep dwell time affect results. Sweeps start from a fresh seeded patient by default (or clone current state on request) and preserve hysteresis within each ascending/descending path.'
   ],
   highStrainCutoff: 1.65, referenceTranspulmonaryPressure: 5,
@@ -33,7 +37,8 @@ export const MODEL_INFO = Object.freeze({
     high: 'Heterogeneous opening thresholds with substantial potentially recruitable tissue.',
     low: 'Similar reduced capacity but more tissue with opening thresholds beyond usual pressures; low achievable recruitment.',
     wall: 'Same seeded lung and initial recruitment assumptions as high; greater baseline pleural offset and chest-wall elastance.',
-    healthy: 'Lower opening thresholds, initially near-complete recruitment, and open-region parameters illustrating preserved mechanics.'
+    healthy: 'Lower opening thresholds, initially near-complete recruitment, and open-region parameters illustrating preserved mechanics.',
+    healthyDependent: 'Healthy parameters and random draws with deterministic extra dependent-region closure tendency (lower initial f, higher thresholds above dependency 0.6); illustrative, not fitted.'
   }
 });
 
@@ -49,13 +54,14 @@ export function createPatient(kind = 'high', seed = 13791, count = 512, pbw = 70
   if (!Object.hasOwn(PARAMETERS, kind)) throw new RangeError(`Unknown phenotype: ${kind}`);
   finite(seed, 'seed'); finite(count, 'count'); finite(pbw, 'pbw');
   if (!Number.isInteger(count) || count < 1 || count > 10000 || pbw <= 0) throw new RangeError('count must be an integer 1..10000; pbw must be positive');
-  const p = PARAMETERS[kind], random = rng(seed), size = pbw / 70;
+  const p = PARAMETERS[kind], random = rng(seed), size = pbw / 70, healthyLike = kind === 'healthy' || kind === 'healthyDependent';
   const units = Array.from({ length: count }, (_, id) => {
     const dep = random(), weight = 0.7 + 0.6 * random(), hetero = 0.75 + 0.5 * random();
-    const permanentlyDifficult = random() < (kind === 'low' ? 0.68 : kind === 'healthy' ? 0 : 0.08);
-    const popen = kind === 'healthy' ? 0.3 + 3 * random() : (permanentlyDifficult ? 38 + 20 * random() : 6 + 15 * random() + 6 * dep);
-    const pclose = kind === 'healthy' ? -3 + 2 * random() : 0.5 + 6 * random() + 3 * dep;
-    const f = kind === 'healthy' ? p.initial : clamp(p.initial + 0.4 * (0.5 - dep) + 0.1 * (random() - 0.5), 0, 1);
+    const permanentlyDifficult = random() < (kind === 'low' ? 0.68 : healthyLike ? 0 : 0.08);
+    let popen = healthyLike ? 0.3 + 3 * random() : (permanentlyDifficult ? 38 + 20 * random() : 6 + 15 * random() + 6 * dep);
+    let pclose = healthyLike ? -3 + 2 * random() : 0.5 + 6 * random() + 3 * dep;
+    let f = healthyLike ? p.initial : clamp(p.initial + 0.4 * (0.5 - dep) + 0.1 * (random() - 0.5), 0, 1);
+    if (kind === 'healthyDependent') { const s = Math.max(0, (dep - 0.6) / 0.4); f = p.initial - 0.6 * s; popen += 1 * s; pclose += 3.5 * s; }
     return { id, dep, weight, capacity: p.capacity * size * hetero, rest: p.rest * size, stiffness: p.stiffness * (0.8 + 0.4 * random()), popen, pclose: Math.min(pclose, popen - 0.5), tauOpen: 0.35 + 1.2 * random(), tauClose: 1.3 + 3 * random(), rateWidth: 3, f, perfusion: 0.5 + dep };
   });
   const sum = units.reduce((s, u) => s + u.weight, 0);

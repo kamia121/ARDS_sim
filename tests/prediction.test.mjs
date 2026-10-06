@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {LESSONS,predictionQuestion,evaluatePrediction} from '../src/teaching.js';
-import {createPatient,simulate} from '../src/engine.js';
+import {LESSONS,predictionQuestion,evaluatePrediction,lessonSettings} from '../src/teaching.js';
+import {createPatient} from '../src/engine.js';
+import {simulateExperiment as simulate} from '../src/experiments.js';
 
 test('all scenario/level predictions are checked against actual seeded model outputs',()=>{
  for(const [key,lesson] of Object.entries(LESSONS)){
   const before=lesson.kinds.map(kind=>simulate(createPatient(kind,13791),lesson.baseline));
-  const after=lesson.kinds.map(kind=>simulate(createPatient(kind,13791),{...lesson.baseline,...lesson.adjustment}));
+  const after=lesson.kinds.map(kind=>simulate(createPatient(kind,13791),lessonSettings({...lesson.baseline,...lesson.adjustment})));
   for(const level of ['student','resident','fellow']){
    const q=predictionQuestion(key,level),a=q.betweenPatients?after[0].metrics[q.metric]:before[q.patient].metrics[q.metric],b=after[q.patient].metrics[q.metric];
    const expected=(b-a)*q.scale>q.band?'up':(b-a)*q.scale<-q.band?'down':'same';

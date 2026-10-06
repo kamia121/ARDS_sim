@@ -17,7 +17,8 @@
     "test:teaching-browser": "node benchmarks/teaching-browser.mjs",
     "test:replay-browser": "node benchmarks/replay-browser.mjs",
     "test:airflow-browser": "node benchmarks/airflow-browser.mjs",
-    "test:sweep-browser": "node benchmarks/sweep-browser.mjs"
+    "test:sweep-browser": "node benchmarks/sweep-browser.mjs",
+    "test:experiments-browser": "node benchmarks/experiments-browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

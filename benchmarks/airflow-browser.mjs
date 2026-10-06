@@ -37,7 +37,7 @@ try{
   assert.equal(r.overflow,false,`${scheme}/${width} overflow`);assert.equal(r.slidersVisible,true,`${scheme}/${width} hidden control`);layout.push({scheme,width,...r});
   if(width===390)await page.screenshot({path:`benchmarks/preview-airflow-${scheme}-mobile.png`});
  }
- await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('#play-breath').isDisabled(),true);
+ await page.emulateMedia({reducedMotion:'reduce'});await page.waitForFunction(()=>document.getElementById('play-breath').disabled);assert.equal(await page.locator('#play-breath').isDisabled(),true);
  const reducedCount=await page.evaluate(()=>window.ardsAnimationCounter);await page.locator('#set-baseline').click();await page.waitForFunction(()=>!document.getElementById('apply-adjustment').disabled);await page.locator('#apply-adjustment').click();await page.waitForFunction(()=>window.ardsResults[0].settings.rr===30);await page.waitForTimeout(300);
  assert.equal(await page.evaluate(()=>window.ardsAnimationCounter),reducedCount);await page.locator('#release-breath').click();
  // Switching modes invalidates pending flow results and restores the original numerical recruitment path.
