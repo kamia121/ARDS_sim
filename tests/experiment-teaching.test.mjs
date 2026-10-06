@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {LESSONS,METRIC_HELP,predictionQuestion,evaluatePrediction,explainAdjustment,lessonSettings} from '../src/teaching.js';
+import {LESSONS,METRIC_HELP,METRIC_NUMBERS,predictionQuestion,evaluatePrediction,explainAdjustment,lessonSettings} from '../src/teaching.js';
 import {createPatient} from '../src/engine.js';
 import {simulateExperiment} from '../src/experiments.js';
+import {frameReadout} from '../src/readout.js';
 
 const NEW=['pressure-drive','prone','chest-load','healthy-dependent'];
 const settingsFor=(lesson,adjust)=>lessonSettings({...lesson.baseline,...adjust});
@@ -135,4 +136,41 @@ test('two simultaneous changes are never labeled as a single adjustment',()=>{
 test('experiment explanations make no safety, oxygenation, hemodynamic or injury claims',()=>{
  const x=explainAdjustment(base,{...base,experiment:{drive:'external',posture:'prone',chestLoad:5}});
  assert.doesNotMatch(Object.values(x).join(' '),/oxygen|hemodynamic|injury|safer|recommend|benefit/i);
+});
+
+test('experiment lesson numbers are labelled, assumption-bearing and make no clinical claims',()=>{
+ for(const k of NEW){
+  assert.match(LESSONS[k].numbers,/^Illustrative numbers, not current patient data\./,k);
+  assert.doesNotMatch(LESSONS[k].numbers,/oxygen|hemodynamic|injury|safer|recommend|improv|benefit/i,k);
+ }
+ assert.match(LESSONS['pressure-drive'].numbers,/25 − 10 = 15/);assert.match(LESSONS['pressure-drive'].numbers,/ideal uniform transmission/);
+ assert.match(LESSONS.prone.numbers,/6\.8/);assert.match(LESSONS.prone.numbers,/4\.1/);assert.match(LESSONS.prone.numbers,/mean stays 5/);
+ assert.match(LESSONS['chest-load'].numbers,/420 mL breath/);assert.match(LESSONS['chest-load'].numbers,/not targets/);
+ assert.match(LESSONS.volume.numbers,/10\.2 \/ 6 = 1\.70/);assert.match(LESSONS.recruitment.numbers,/20 \/ 100 = 20% of ALL tissue/);
+ assert.match(METRIC_NUMBERS.transrespDP,/17 cmH2O/);assert.match(METRIC_HELP.transrespCrs,/uniform-transmission/);
+});
+
+test('prone lesson arithmetic: the same mean pleural pressure is kept while the regional value moves',()=>{
+ const mean=5,meanPos=.5,pos=.8,supine=mean+6*(pos-meanPos),prone=mean-3*(pos-meanPos);
+ assert.ok(Math.abs(supine-6.8)<1e-12&&Math.abs(prone-4.1)<1e-12);
+ assert.ok(Math.abs((20-supine)-13.2)<1e-12&&Math.abs((20-prone)-15.9)<1e-12);
+});
+
+test('readout notes are plain, keep keys, labels and values, and do not promise that each region fills',()=>{
+ const frame={pressure:20,meanPleural:7,volume:2400,flow:-200},pleural={pesModel:8,plEs:12,pplVentral:5,pplDorsal:10};
+ const keys=['external','drive','paw','ppl','pl','volume','delta','flow','pes','plEs','pplVentral','pplDorsal','palv'];
+ for(const kind of ['quasi-static-steps','frozen-aeration-airflow'])for(const p of [null,pleural]){
+  const rows=frameReadout(frame,kind,2000,p);
+  assert.deepEqual(rows.map(r=>r.key),keys);
+  for(const r of rows){assert.ok(r.note.length>20,r.key);assert.doesNotMatch(r.note,/each region (fills|opens)|every region (fills|opens)/i,r.key);}
+ }
+ const flow=frameReadout(frame,'frozen-aeration-airflow',2000,pleural),quasi=frameReadout(frame,'quasi-static-steps',2000,pleural);
+ const note=(rows,key)=>rows.find(r=>r.key===key).note;
+ assert.equal(flow.find(r=>r.key==='paw').label,'Airway · Paw');assert.equal(quasi.find(r=>r.key==='pl').value,13);
+ assert.match(note(quasi,'ppl'),/^Average pressure around the lung/);assert.match(note(quasi,'ppl'),/not a measurement/);
+ assert.match(note(quasi,'external'),/outside of the body/);assert.match(note(quasi,'paw'),/pressure inside the airspaces/);
+ assert.match(note(flow,'paw'),/flow resistance|airflow resistance/);assert.match(note(flow,'pl'),/not alveolar/);
+ assert.match(note(flow,'plEs'),/not alveolar/);assert.match(note(flow,'palv'),/own alveolar pressure/);
+ assert.match(note(quasi,'pes'),/not a balloon measurement/);assert.match(note(quasi,'pes'),/not.*whole-lung mean/);
+ assert.match(note(quasi,'pes'),/matches the whole-lung mean/);
 });

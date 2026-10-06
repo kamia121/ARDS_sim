@@ -9,7 +9,7 @@ try{
  await page.goto('http://127.0.0.1:5173');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory.pleural);
  assert.equal(await page.locator('.all-pressures').first().evaluate(e=>e.open),false);
  assert.equal(await page.locator('#map-a').evaluate(e=>Boolean(e.compareDocumentPosition(document.getElementById('pressures-a'))&Node.DOCUMENT_POSITION_FOLLOWING)),true);
- assert.match(await page.locator('#stretch-scope').textContent(),/tissue damage is not predicted/);
+ assert.match(await page.locator('#stretch-scope').textContent(),/not a count of injured lung/);
  await page.locator('#ei').click();
  const verifyPes=async()=>{const expected=await page.evaluate(()=>{const r=window.ardsResults[0],f=r.trajectory.frames[r.trajectory.eiIndex],m=r.trajectory.pleural;return f.meanPleural+m.gradient*(.65-m.depMean);}),value=await page.locator('#pressures-a .pressure-cell').filter({has:page.locator('span',{hasText:'Esophageal surrogate · Pes'})}).locator('strong').textContent();assert.ok(Math.abs(Number(value)-expected)<.051);};
  await verifyPes();

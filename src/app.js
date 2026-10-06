@@ -1,9 +1,9 @@
+import {RECRUITMENT_COPY,AIRFLOW_COPY,ELI5_COPY,PHASE_COPY} from './learner-copy.js';
 import {frameReadout} from './readout.js';
-import {expansionColor,EXPANSION_THRESHOLD} from './map-color.js';
+import {expansionColor,EXPANSION_THRESHOLD,OPEN_FILL_MIN,SQUARE_MIN_OPEN,RING_GAIN,RING_MIN_OPEN,EXTRA_AIR_RING_FRACTION} from './map-color.js';
 import {pleuralField,framePleural} from './pleural-readout.js';
 import {sampleTrajectory,frameLabel,transitionFrame,loopTransitionFrame,displaySegment,displayElapsed} from './playback.js';
-import {LESSONS,METRIC_HELP,explainComparison,explainAdjustment,predictionQuestion,evaluatePrediction,FLOW_LESSONS,airflowQuestion} from './teaching.js';
-Object.assign(METRIC_HELP,{transrespDP:'The effective airway-minus-external pressure change from expiration to end inspiration. In tank mode this is not airway driving pressure.',transrespCrs:'Delivered tidal volume divided by the effective airway-minus-external pressure swing. This ideal uniform-transmission model preserves lung mechanics at matched drive.'});
+import {LESSONS,METRIC_HELP,METRIC_NUMBERS,explainComparison,explainAdjustment,predictionQuestion,evaluatePrediction,FLOW_LESSONS,airflowQuestion} from './teaching.js';
 const $=id=>document.getElementById(id);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
 let request=0,compareId=0,lastResults=null,lastSweep=null,deviceResults=null,sweepId=0,benchmarkId=0,phase='ee',timer,positions={};
@@ -22,7 +22,7 @@ const scoredQuestions=new Set();
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 const mapGeometry={};
 let recruitmentLesson='recruitment';
-const recruitmentOptions=$('lesson').innerHTML,recruitmentLegend=document.querySelector('.legend').innerHTML,recruitmentHelp=$('map-help').innerHTML;
+const recruitmentOptions=$('lesson').innerHTML;
 const isAirflow=()=>$('mechanics-mode').value==='airflow';
 const flowParams=()=>({R0:+$('resistance').value/1000,Rp:.004});
 const currentQuestion=()=>isAirflow()?airflowQuestion($('lesson').value,$('learner-level').value):predictionQuestion($('lesson').value,$('learner-level').value);
@@ -40,7 +40,7 @@ function updateExperimentViews(){
  $('peep-label').textContent=external?'Negative pressure at expiration':'PEEP';
  $('peep-help').textContent=external?'Magnitude of continuous negative external pressure; airway remains at zero.':'Positive end-expiratory pressure: airway pressure remaining between breaths.';
  $('sweep').disabled=external||isAirflow();
- $('experiment-scope').textContent=isAirflow()?'Pressure-source, posture and chest-load experiments are unavailable in frozen-aeration airflow mode.':external?'Ideal uniform transmission: the same volume can have the same lung-distending pressure with lower airway and pleural pressure. No circulatory effects are modeled.':'Load adds a uniform pleural offset, not kilograms or stiffness. Prone reverses and halves the gradient while preserving its tissue-weighted mean.';
+ $('experiment-scope').textContent=isAirflow()?'This airflow view holds the open tissue fixed. Use the recruitment view to change how pressure is applied, body position, or chest load.':external?'This model can fill the lung by lowering pressure outside the chest. The same pressure difference gives the same expansion. Effects on the circulation are not included.':'Chest load raises the pressure around the lung; it is a pressure change, not kilograms. Prone changes how that surrounding pressure varies from front to back.';
  for(const k of ['pressure-drive','posture','chest-load'])$(k).disabled=isAirflow();
  document.querySelectorAll('.map-wrap .orientation:last-child').forEach(el=>el.textContent=$('posture').value==='prone'?'Dorsal · posterior · prone-nondependent':'Dorsal · posterior · supine-dependent');
  if(external)$('sweep-caption').textContent='Return to positive airway pressure to run the PEEP sweep.';
@@ -73,7 +73,7 @@ function metric(label,value,unit='',secondary=false,helpKey='',delta=''){
   const e=document.createElement('div');e.className='metric'+(secondary?' secondary':'');
   const v=document.createElement('strong');v.textContent=value+' ';const u=document.createElement('small');u.textContent=unit;v.append(u);
   const l=document.createElement('span');l.className='metric-label';const name=document.createElement('span');name.textContent=label;l.append(name);
-  if(helpKey){const b=document.createElement('button');b.type='button';b.className='metric-help-button';b.textContent='?';b.setAttribute('aria-label','Explain '+label);b.addEventListener('click',()=>{e.closest('.patient').querySelector('.metric-description').textContent=METRIC_HELP[helpKey];});l.append(b);}
+  if(helpKey){const b=document.createElement('button');b.type='button';b.className='metric-help-button';b.textContent='?';b.setAttribute('aria-label','Explain '+label);b.addEventListener('click',()=>renderMetricHelp(e.closest('.patient').querySelector('.metric-description'),helpKey));l.append(b);}
   e.append(v,l);if(delta){const chip=document.createElement('small');chip.className='metric-delta';chip.textContent=delta;e.append(chip);}return e;
 }
 function updateMetrics(k,result){
@@ -83,15 +83,15 @@ function updateMetrics(k,result){
   box.replaceChildren(
     metric('Delivered / requested',`${fmt(m.vtDelivered)} / ${fmt(result.targetVT)}`,'mL',false,'delivery',delta('vtDelivered',1,'mL')),
     metric(result.conditions?.drive==='external'?'Transrespiratory pressure swing':'Driving pressure',fmt(result.conditions?.drive==='external'?result.conditions.transrespDP:m.dp,1),'cmH2O',false,result.conditions?.drive==='external'?'transrespDP':'dp',delta('dp',1,'cmH2O')),
-    metric('Open between breaths',pct(m.openEE),'',true,'openEE',delta('openEE',100,'pp')),
-    metric('Possible excessive stretch at inspiration',pct(m.over),'',true,'over',delta('over',100,'pp'))
+    metric('Open tissue before breath',pct(m.openEE),'',true,'openEE',delta('openEE',100,'pp')),
+    metric('High-stretch tissue share',pct(m.over),'',true,'over',delta('over',100,'pp'))
   );
   const patient=$('patient-'+k);
   let pressure=patient.querySelector('.pressure-summary');if(!pressure){pressure=document.createElement('p');pressure.className='pressure-summary';patient.append(pressure);}
   pressure.textContent=`Mean pleural pressure: ${fmt(m.meanPleuralEE,1)} at expiration → ${fmt(m.meanPleuralEI,1)} cmH2O at inspiration. Mean transpulmonary pressure at inspiration: ${fmt(m.pplat,1)} − ${fmt(m.meanPleuralEI,1)} = ${fmt(m.transpulmonaryEI,1)} cmH2O.`;
-  let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');help.textContent='';patient.append(help);}
+  let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('div');help.className='metric-description';help.setAttribute('aria-live','polite');help.textContent='';patient.append(help);}
   let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';const summary=document.createElement('summary');summary.textContent='Additional model measures';advanced.append(summary);const values=document.createElement('div');values.className='metrics';advanced.append(values);patient.append(advanced);}
-  advanced.querySelector('.metrics').replaceChildren(metric(result.conditions?.drive==='external'?'Transrespiratory compliance':'Respiratory compliance',fmt(result.conditions?.drive==='external'?result.conditions.transrespCrs:m.crs),'mL/cmH2O',false,result.conditions?.drive==='external'?'transrespCrs':'crs'),metric('End-expiratory gas volume',fmt(m.eelv/1000,2),'L',false,'eelv'),metric('Plateau airway pressure',fmt(m.pplat,1),'cmH2O',false,'pplat'),metric('Intratidal aeration gain',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
+  advanced.querySelector('.metrics').replaceChildren(metric(result.conditions?.drive==='external'?'Transrespiratory compliance':'Respiratory compliance',fmt(result.conditions?.drive==='external'?result.conditions.transrespCrs:m.crs),'mL/cmH2O',false,result.conditions?.drive==='external'?'transrespCrs':'crs'),metric('Air before this breath',fmt(m.eelv/1000,2),'L',false,'eelv'),metric('Plateau airway pressure',fmt(m.pplat,1),'cmH2O',false,'pplat'),metric('Tissue opened during the breath',pct(m.cyclic),'',true,'cyclic'),metric('Perfusion-weighted closed fraction',pct(m.closedPerfusion),'',true,'closedPerfusion'));
   advanced.append(pressure);
   const delivery=$('delivery-'+k);delivery.className='delivery'+(m.limited?' limited':'');
   delivery.textContent=(m.limited?`${fmt(result.settings.pressureLimit)} cmH2O drive-pressure ceiling reached during inspiration; check actual delivered volume.`:'');
@@ -110,7 +110,7 @@ function renderTeaching(){
     const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label+': ';p.append(strong,adjustment[key]);$('adjustment-explanation').append(p);
   }
   lastResults.forEach((r,i)=>{
-    const x=explainComparison(baseline[i].metrics,r.metrics);if(r.conditions?.drive==='external'||baseline[i].conditions?.drive==='external'){x.changes=`Aerated tissue ${pct(baseline[i].metrics.openEE)} → ${pct(r.metrics.openEE)}; delivered volume ${fmt(baseline[i].metrics.vtDelivered)} → ${fmt(r.metrics.vtDelivered)} mL; mean lung-distending pressure ${fmt(baseline[i].metrics.transpulmonaryEI,1)} → ${fmt(r.metrics.transpulmonaryEI,1)} cmH2O.`;x.meaning='Changing where pressure is applied changes airway and pleural numbers. With uniform transmission and the same effective drive, regional volume, recruitment and lung-distending pressure are unchanged. Airway driving pressure is not the pressure cost of external ventilation.';}const article=document.createElement('article'),h=document.createElement('h3');h.textContent='Patient '+(i?'B':'A');article.append(h);
+    const x=explainComparison(baseline[i].metrics,r.metrics);if(r.conditions?.drive==='external'||baseline[i].conditions?.drive==='external'){x.changes=`Open tissue before the breath ${pct(baseline[i].metrics.openEE)} → ${pct(r.metrics.openEE)}; delivered volume ${fmt(baseline[i].metrics.vtDelivered)} → ${fmt(r.metrics.vtDelivered)} mL; mean pressure across the lung ${fmt(baseline[i].metrics.transpulmonaryEI,1)} → ${fmt(r.metrics.transpulmonaryEI,1)} cmH2O.`;x.meaning='The same lung can fill by raising pressure inside or lowering pressure outside. In this simple model, matching that pressure difference gives the same opening and expansion. The airway and surrounding-pressure numbers change, but that alone does not mean the lung is stretched more.';}const article=document.createElement('article'),h=document.createElement('h3');h.textContent='Patient '+(i?'B':'A');article.append(h);
     for(const [key,label] of [['changes','Observed changes'],['meaning','Interpretation'],...($('lesson').value==='wall'||$('learner-level').value==='fellow'?[['pressure','Pressure across lung tissue']]:[])]){const p=document.createElement('p'),strong=document.createElement('strong');p.className=key;strong.textContent=label+': ';p.append(strong,x[key]);article.append(p);}output.append(article);
   });
 }
@@ -119,13 +119,13 @@ function updateLesson(){
   $('lesson-instruction').textContent=lesson.instruction;
   $('lesson-objective').textContent=lesson.objective||lesson.instruction;
   updateQuestion();
-  $('lesson-reflection').textContent=lesson.reflection;
+  $('lesson-reflection').textContent=lesson.reflection;const box=$('lesson-numbers');box.replaceChildren();if(lesson.numbers)box.append(numberDetails(lesson.numbers,'lesson-'+$('lesson').value,'Work through this scenario'));
 }
 function updateQuestion(){
   const q=currentQuestion();$('lesson-prediction').textContent=q.prompt;
   const names=q.betweenPatients?{up:'Higher in B',same:'Similar',down:'Lower in B'}:{up:'Increase',same:'Little change',down:'Decrease'};
   for(const b of document.querySelectorAll('[data-prediction]')){b.textContent=names[b.dataset.prediction];b.setAttribute('aria-pressed',String(b.dataset.prediction===prediction));}
-  $('lesson-objective').textContent=q.focus;
+  $('lesson-objective').textContent='Goal: '+(currentLesson().objective||q.focus);
   $('prediction-band').textContent=`For this exercise, similar/little change means within ±${q.band} ${q.unit==='%'?'percentage point':q.unit}. This is a display band, not clinical significance.`;
 }
 for(const b of document.querySelectorAll('[data-prediction]'))b.addEventListener('click',()=>{
@@ -173,15 +173,15 @@ function drawMap(k,result,frame){
     const pos=geo.points[i],x=cx+pos.side*(rx+gap)+pos.dx*scale,y=cy+pos.dy*scale;
     const f=frame?frame.unitOpen[i]:phase==='ei'?u.openEI:u.openEE;
     const transitionWeight=frame?.transitionWeight;
-    const atEI=frame?frame===ei:phase==='ei',high=(atEI||transitionWeight!==undefined)&&u.strainEI>EXPANSION_THRESHOLD&&f>.2;
-    const flowMode=result.trajectory?.kind==='frozen-aeration-airflow',cyclic=!flowMode&&f-u.openEE>.08&&f>.15;
-    const state=f>.35?'open':'closed';
+    const atEI=frame?frame===ei:phase==='ei',high=(atEI||transitionWeight!==undefined)&&u.strainEI>EXPANSION_THRESHOLD&&f>SQUARE_MIN_OPEN;
+    const flowMode=result.trajectory?.kind==='frozen-aeration-airflow',cyclic=!flowMode&&f-u.openEE>RING_GAIN&&f>RING_MIN_OPEN;
+    const state=f>OPEN_FILL_MIN?'open':'closed';
     const v=frame?frame.unitVolume[i]:phase==='ei'?u.volumeEI:u.volumeEE;
     const radius=Math.max(1.15,Math.sqrt(Math.max(0,v)*12/Math.PI));
     ctx.globalAlpha=state==='closed'?.75:.4+.6*f;ctx.fillStyle=state==='open'&&frame?.unitRatio?expansionColor(frame.unitRatio[i]):colors[state];ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);ctx.fill();
     if(cyclic){ctx.globalAlpha=1;ctx.strokeStyle=colors.ink;ctx.lineWidth=1.4;ctx.setLineDash([2,2]);ctx.stroke();ctx.setLineDash([]);}
     if(high){ctx.globalAlpha=Math.max(.2,f)*(1-(transitionWeight??0));ctx.strokeStyle=colors.over;ctx.lineWidth=1.2;ctx.strokeRect(x-radius-1,y-radius-1,2*radius+2,2*radius+2);}
-    if(flowMode&&u.active&&u.volumeEI-u.relaxedVolume>1e-9&&v-u.relaxedVolume>.1*(u.volumeEI-u.relaxedVolume)){ctx.globalAlpha=.8;ctx.strokeStyle='#798ec5';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(x,y,radius+1.2,0,2*Math.PI);ctx.stroke();}
+    if(flowMode&&u.active&&u.volumeEI-u.relaxedVolume>1e-9&&v-u.relaxedVolume>EXTRA_AIR_RING_FRACTION*(u.volumeEI-u.relaxedVolume)){ctx.globalAlpha=.8;ctx.strokeStyle='#798ec5';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(x,y,radius+1.2,0,2*Math.PI);ctx.stroke();}
     positions[k].push({x,y,u,state});
   });ctx.globalAlpha=1;
   const name=frame?.loopWeight!==undefined?'Visual replay transition':frame?.transitionWeight!==undefined?'Visual expiration transition':frame&&result.trajectory?frameLabel(frame,currentFrameIndex,result.trajectory):phase==='ei'?'end inspiration':'before inspiration';
@@ -192,9 +192,9 @@ function updateUnitDetail(k,result){
   const current=currentFrames[k==='a'?0:1];
   const local=current&&result?framePleural(current,getPleuralField(result)):null;
   const pressureDetail=u&&local?` Current regional pleural pressure ${fmt(local.pplAt(u.dep),1)} cmH2O; ${result.trajectory.kind==='frozen-aeration-airflow'?'airway − pleural (includes resistance)':'regional lung-distending pressure'} ${fmt(current.pressure-local.pplAt(u.dep),1)} cmH2O.`:'';
-  const text=u?`Unit ${u.id}: open ${pct(u.openEE)} before inspiration / ${pct(u.openEI)} at end inspiration. Fully open volume ratio ${fmt(u.strainEI,2)} at inspiration. Opening ${fmt(u.popen,1)}, closing ${fmt(u.pclose,1)} cmH2O transpulmonary pressure.`:'Select a lung unit on the map or enter its number to inspect the current result.';
-  if(u&&result.trajectory?.kind==='frozen-aeration-airflow'){const i=result.units.indexOf(u),q=current?.unitFlow?.[i],node=current?current.pressure-result.airflow.params.R0*current.flow:null,palv=Number.isFinite(node)&&u.active?node-u.resistance*q:null;const detail=`Region ${u.id}: flow ${fmt(q,2)} mL/s (+ in, − out); intrinsic RC ${Number.isFinite(u.tauLocal)&&u.tauLocal<.001?'<0.001':fmt(u.tauLocal,3)} s; excess gas emptied ${Number.isFinite(u.fractionEmptied)?pct(u.fractionEmptied):'--'}; alveolar pressure ${fmt(palv,1)} cmH2O. RC excludes shared resistance and chest wall.${Number.isFinite(u.fractionEmptied)&&(u.fractionEmptied>1||u.fractionEmptied<0)?' The regional fraction can exceed its relaxed reference through redistribution.':''}`;$('unit-'+k).textContent=detail+pressureDetail;return;}
-  const display=u&&current?text+` Selected phase: open ${pct(current.unitOpen[u.id])}, gas volume ${fmt(current.unitVolume[u.id],2)} mL.`+pressureDetail:text;
+  const text=u?`Region ${u.id}: open ${pct(u.openEE)} before inspiration / ${pct(u.openEI)} at end inspiration. At the end of the breath in, the open part is ${fmt(u.strainEI,2)}× its reference size. Opening starts gradually above ${fmt(u.popen,1)}; closing starts below ${fmt(u.pclose,1)} cmH2O pressure across this region.`:'Select a lung unit on the map or enter its number to inspect the current result.';
+  if(u&&result.trajectory?.kind==='frozen-aeration-airflow'){const i=result.units.indexOf(u),q=current?.unitFlow?.[i],node=current?current.pressure-result.airflow.params.R0*current.flow:null,palv=Number.isFinite(node)&&u.active?node-u.resistance*q:null;const detail=`Region ${u.id}: flow ${fmt(q,2)} mL/s (+ in, − out); its own emptying-time estimate (RC) ${Number.isFinite(u.tauLocal)&&u.tauLocal<.001?'<0.001':fmt(u.tauLocal,3)} s; share of extra air released ${Number.isFinite(u.fractionEmptied)?pct(u.fractionEmptied):'--'}; pressure inside this airspace ${fmt(palv,1)} cmH2O. RC = resistance × compliance for this region alone; the shared airway and chest wall also affect emptying.${Number.isFinite(u.fractionEmptied)&&(u.fractionEmptied>1||u.fractionEmptied<0)?' Air can move between regions; this fraction compares with a resting reference, not with all the air inside.':''}`;$('unit-'+k).textContent=detail+pressureDetail;return;}
+  const display=u&&current?text+` Now: ${pct(current.unitOpen[u.id])} open and holding ${fmt(current.unitVolume[u.id],2)} mL of air.`+pressureDetail:text;
   if($('unit-'+k).textContent!==display)$('unit-'+k).textContent=display;
 }
 for(const [i,k] of ['a','b'].entries()){
@@ -286,7 +286,7 @@ function renderSweepStep(announce=false){
     const p=r[step.direction][step.i];
     overlay.append(svgEl('circle',{cx:s.x(peep),cy:s.y(p.openEE*100),r:5,fill:c,stroke:colors.surface,'stroke-width':1}));
     overlay.append(svgEl('rect',{x:s.x(peep)-4,y:s.y(p.over*100)-4,width:8,height:8,fill:colors.surface,stroke:c,'stroke-width':2}));
-    readouts.push(`${i?'B':'A'}: aerated ${pct(p.openEE)}, above stretch threshold ${pct(p.over)}${p.limited?' (pressure ceiling reached)':''}`);
+    readouts.push(`${i?'B':'A'}: open before the breath ${pct(p.openEE)}, high-stretch tissue share ${pct(p.over)}${p.limited?' (pressure ceiling reached)':''}`);
   });
   const text=`PEEP ${peep} cmH2O · ${step.direction==='ascending'?'Rising':'Falling'} · ${sweepIndex+1}/${steps.length} · ${readouts.join(' · ')}`;
   $('sweep-readout').textContent=text;$('sweep-frame').max=steps.length-1;$('sweep-frame').value=sweepIndex;$('sweep-frame').setAttribute('aria-valuetext',text);
@@ -317,7 +317,7 @@ worker.onmessage=({data})=>{
     if(data.type==='airflow')for(const result of data.results)for(const frame of result.trajectory.frames)frame.unitOpen=result.trajectory.frozenOpen;
     const bookmark=viewBookmark;viewBookmark=null;lastResults=data.results;window.ardsResults=lastResults;comparisonFresh=compareContext.fresh;restoreView(bookmark);
     for(const k of ['a','b'])$('patient-'+k).removeAttribute('aria-busy');for(const id of ['comparison-explanation','adjustment-explanation']){$(id).removeAttribute('aria-busy');$(id).classList.remove('stale-result');}
-    $('status').textContent=data.type==='airflow'?`Frozen aeration · ${lastResults[0].breaths}/${lastResults[1].breaths} settling breaths · ${lastResults.every(r=>r.metrics.converged)?'near-periodic cycle':'periodicity criterion not reached'}.`:`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Drive-pressure limit: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
+    $('status').textContent=data.type==='airflow'?`Open tissue held fixed · ${lastResults[0].breaths}/${lastResults[1].breaths} breaths calculated · ${lastResults.every(r=>r.metrics.converged)?'almost repeating now':'still changing from breath to breath'}.`:`10 breaths simulated at RR ${lastResults[0].settings.rr}/min. ${comparisonFresh?'Fresh seeded patients for this comparison.':'Prior recruitment state retained.'} Drive-pressure limit: ${fmt(lastResults[0].settings.pressureLimit)} cmH2O.`;
     if(pendingBaseline&&data.id===baselineRequest&&baselineExpected?.fresh&&baselineExpected.config===compareContext.config&&JSON.stringify(baselineExpected.settings)===JSON.stringify(compareContext.settings)&&baselineExpected.lesson===$('lesson').value&&baselineExpected.mode===$('mechanics-mode').value){baseline=lastResults.map(({trajectory,...summary})=>structuredClone(summary));baselineConfig=comparisonConfig;pendingBaseline=false;$('apply-adjustment').disabled=false;$('baseline-status').textContent='Baseline ready. Predict, then apply the change.';$('comparison-explanation').replaceChildren();$('adjustment-explanation').replaceChildren();}else renderTeaching();
     if(predictionPending?.id===data.id&&predictionPending.lesson===$('lesson').value&&predictionPending.level===$('learner-level').value){
       const answer=evaluatePrediction(predictionPending.question,predictionPending.before,lastResults,predictionPending.prediction);
@@ -329,7 +329,7 @@ worker.onmessage=({data})=>{
     const list=document.createElement('ul');for(const item of data.modelInfo.assumptions||[]){const li=document.createElement('li');li.textContent=item;list.append(li);} $('model-info').replaceChildren(list);
   }else if(data.type==='sweep'){
     if(data.id!==sweepId)return;pauseSweep();lastSweep=data.results;window.ardsSweep=lastSweep;sweepIndex=sweepSteps().length-1;drawSweep();$('sweep').disabled=false;$('sweep').textContent='Run PEEP sweep';
-    $('sweep-caption').textContent='As PEEP rises, does more lung stay aerated between breaths, and how much aerated tissue exceeds the assumed stretch threshold at end inspiration? Solid = aerated; dashed = above stretch threshold. Dotted and dash-dot show the same measures as PEEP falls. Rings mark the pressure ceiling, which may reduce delivered volume. Each point uses 10 breaths; connecting lines are visual guides. Active patients are preserved.';startSweep();
+    $('sweep-caption').textContent='Solid lines: tissue staying open before the next breath as PEEP rises. Dashed: open tissue above the assumed stretch cutoff at the end of the breath in. Dotted paths repeat the comparison as PEEP falls. Rings mark the pressure limit; check delivered volume. Each point uses ten breaths; lines only connect calculated points.';startSweep();
   }else if(data.type==='benchmark-progress'){if(data.id===benchmarkId)$('benchmark-status').textContent=data.message;}
   else if(data.type==='benchmark'){
     if(data.id!==benchmarkId)return;deviceResults=data.results;window.ardsBenchmark=deviceResults;$('benchmark-rows').replaceChildren();
@@ -438,7 +438,7 @@ function renderPressures(k,r,frame){
   if(!mapReadoutCells[k]){mapReadoutCells[k]={};for(const key of ['paw','pes','plEs','volume']){const cell=document.createElement('span'),label=document.createElement('small'),value=document.createElement('strong');cell.append(label,value);$('map-pressures-'+k).append(cell);mapReadoutCells[k][key]={label,value};}}
   for(const key of ['paw','pes','plEs','volume']){const row=rows.find(x=>x.key===key),c=mapReadoutCells[k][key];c.label.textContent=key==='plEs'?(r.trajectory.kind==='frozen-aeration-airflow'?'Paw − Pes':'PL from Pes'):key==='volume'?'Volume (L)':key==='paw'?'Paw':'Pes surrogate';c.value.textContent=fmt(row.value,key==='volume'?2:1);c.value.title=row.note;}
   drawPressureField(k,frame,field,pressure,r.trajectory.kind);
-  $('pressure-scope-'+k).textContent=(displayKind==='loop'?'Values held at recorded end during visual replay transition. ':displayFrames?'Values held at end inspiration during visual transition. ':'')+'Pes is a local surrogate at an assumed esophageal level; no balloon measurement or calibration is simulated.';
+  $('pressure-scope-'+k).textContent=(displayKind==='loop'?'Values held at recorded end during visual replay transition. ':displayFrames?'Values held at end inspiration during visual transition. ':'')+'Simulated Pes samples pressure around the lung at one assumed position. It is not a clinical balloon reading.';
   root.setAttribute('aria-live',playing?'off':'polite');
 }
 function renderFrame(announce=false){
@@ -453,22 +453,13 @@ function renderFrame(announce=false){
   $('breath-phase').textContent=`${name==='End inspiration'&&playing?'End inspiration (inspect)':name} · ${fmt(replayTime,2)} / ${fmt(trajectory.cycle,2)} s`;
   $('ee').setAttribute('aria-pressed',String(currentFrameIndex===0&&!playing));$('ei').setAttribute('aria-pressed',String(currentFrames[0]===trajectory.frames[trajectory.eiIndex]));$('release-breath').setAttribute('aria-pressed',String(currentFrames[0]===trajectory.frames[trajectory.releaseIndex]));$('end-expiration').setAttribute('aria-pressed',String(currentFrameIndex===trajectory.frames.length-1));
   const label=name;
-  const phasePrompts={
-    'Before inspiration':'Grey regions contribute less to the breath. Watch whether they open as pressure rises.',
-    'Inspiration':'Open regions fill with gas. Fill shifts from green through yellow to red as regions expand; dashed rings mark recruitment.',
-    'End inspiration':'More lung can open while other ventilated regions develop possible excessive stretch. Compare recruitment rings with red regions.',
-    'Start expiration':'Airway pressure returns to PEEP, but regional gas volume is continuous and begins to empty through resistance.',
-    'Pressure release':'Gas volume drops immediately as pressure returns to PEEP; this model has no airway resistance.',
-    'Expiration':'PEEP is the pressure left between breaths. Watch which regions stay open and which lose aeration.',
-    'End expiration':'This is the end of the recorded breath. Compare with the start; ten breaths need not be steady state.'
-  };
-  $('phase-story').textContent=reducedMotion.matches?'Motion is reduced. Use the phase buttons or scrubber to inspect the computed breath.':phasePrompts[label]||phasePrompts.Inspiration;
-  if(trajectory.kind==='frozen-aeration-airflow'&&!reducedMotion.matches){const messages={'Before inspiration':'This is gas remaining from the preceding cycle. Aeration is held fixed.','Inspiration':'Flow fills the fixed open regions. Airway pressure includes the resistive load.','End inspiration':'Flow is still entering at this snapshot. The displayed peak pressure is not a measured plateau.','Start expiration':'Pressure returns to PEEP, while gas volume remains continuous and flow turns outward.','Expiration':'Gas leaves through resistance. Watch the expiratory flow approach zero.','End expiration':'Compare remaining gas and end-expiratory flow before the next breath begins.'};$('phase-story').textContent=messages[name]||messages.Inspiration;}
-  if(currentFrames.some(f=>f?.ceilingActive))$('phase-story').textContent='The pressure ceiling constrains this part of inspiration. Compare delivered with requested volume.';
+  const messages=PHASE_COPY[isAirflow()?'airflow':'recruitment'];
+  $('phase-story').textContent=reducedMotion.matches?'Use the phase buttons to look at each calculated part of the breath.':messages[name]||messages.Inspiration;
+  if(currentFrames.some(f=>f?.ceilingActive))$('phase-story').textContent='The model reached its pressure limit here. Check whether it delivered the whole requested breath.';
   lastResults.forEach((r,i)=>{const frame=currentFrames[i];if(!frame)return;const k=i?'b':'a';drawMap(k,r,displayFrames?.[i]??frame);renderPressures(k,r,frame);$('live-'+k).textContent=r.trajectory.kind==='frozen-aeration-airflow'?`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · Flow ${fmt(frame.flow/1000,2)} L/s`:$('lesson').value==='wall'||$('learner-level').value!=='student'?`${fmt(frame.volume/1000,2)} L · ${pct(frame.open)} open · Paw ${fmt(frame.pressure,1)} − Ppl ${fmt(frame.meanPleural,1)} = PL ${fmt(frame.pressure-frame.meanPleural,1)} cmH2O`:`${fmt(frame.volume/1000,2)} L · Paw ${fmt(frame.pressure,1)} cmH2O · ${pct(frame.open)} open`;$('unit-'+k).setAttribute('aria-live',playing?'off':'polite');if(!playing||selectedUnits[k]!==null)updateUnitDetail(k,r);});
   if(isAirflow()&&window.ardsFlowScales){const scales=window.ardsFlowScales;document.querySelectorAll('#flow-chart .breath-cursor').forEach(e=>e.remove());currentFrames.forEach((frame,i)=>$('flow-chart').append(svgEl('circle',{class:'breath-cursor',cx:scales.x(replayTime),cy:scales.y(frame.flow/1000),r:4,fill:i?colors.b:colors.a})));}
-  if(lastResults[0].conditions?.drive==='external'){$('phase-story').textContent=name==='Inspiration'?'External pressure becomes more negative to expand the lung while airway pressure stays at zero.':name==='End inspiration'?'Airway pressure is zero, but lung-distending pressure is not. Compare negative pleural pressure with positive-pressure ventilation.':name==='Pressure release'?'External pressure returns to the negative end-expiratory support level. Volume release is quasi-static in this model.':'Watch external and pleural pressure change alongside volume. Uniform transmission preserves regional mechanics at matched drive.';}
-  if(displayFrames&&displayKind!=='loop'){$('breath-phase').textContent=`Expiration transition (visual) · ${fmt(replayTime,2)} / ${fmt(trajectory.cycle,2)} s`;$('phase-story').textContent='Visual transition between calculated states. Airflow mode calculates gradual emptying through resistance.';}
+  if(lastResults[0].conditions?.drive==='external'){$('phase-story').textContent=name==='Inspiration'?'Pressure outside the chest falls to help the lung fill; pressure at the airway opening stays at zero.':name==='End inspiration'?'Zero airway pressure does not mean no push across the lung. Look at the lower pressure around it.':name==='Pressure release'?'Pressure outside the chest returns to its between-breath level. This view calculates an immediate gas release.':'Watch pressure inside and around the lung. This simple model makes matching pushes give matching lung expansion.';}
+  if(displayFrames&&displayKind!=='loop'){$('breath-phase').textContent=`Expiration transition (visual) · ${fmt(replayTime,2)} / ${fmt(trajectory.cycle,2)} s`;$('phase-story').textContent='A smooth display blend joins two calculated moments. It is not a new airflow calculation.';}
   if(displayKind==='loop'){const first=trajectory.frames[0],last=trajectory.frames.at(-1);$('breath-phase').textContent='Replay transition (visual)';$('phase-story').textContent=`Same recorded breath: end-to-start difference ${fmt(last.volume-first.volume,1)} mL and ${fmt((last.open-first.open)*100,2)} percentage points of aeration.`;}
   if(announce)$('breath-announce').textContent=$('breath-phase').textContent;
   if(window.ardsPVScales){const scales=window.ardsPVScales;document.querySelectorAll('#pv-chart .breath-cursor').forEach(e=>e.remove());currentFrames.forEach((frame,i)=>{if(frame)$('pv-chart').append(svgEl('circle',{class:'breath-cursor',cx:scales.x(frame.volume/1000),cy:scales.y(scales.external?frame.transrespPressure:frame.pressure),r:4,fill:i?colors.b:colors.a,stroke:'#fff','stroke-width':1}));});}
@@ -511,12 +502,11 @@ const dockObserver=new ResizeObserver(()=>{
   document.documentElement.style.setProperty('--breath-panel-height',`${document.querySelector('.breath-panel').getBoundingClientRect().height}px`);
 });dockObserver.observe(document.querySelector('.control-dock'));dockObserver.observe(document.querySelector('.breath-panel'));
 function updateModeViews(){
-  $('stretch-scope').hidden=isAirflow();pauseSweep();if(isAirflow())restoreExperiment();else updateExperimentViews();
+  $('stretch-scope').textContent='These are model stretch markers, not a count of injured lung.';$('stretch-scope').hidden=isAirflow();pauseSweep();if(isAirflow())restoreExperiment();else updateExperimentViews();
   $('resistance-control').hidden=!isAirflow();$('mode-context').hidden=!isAirflow();$('flow-panel').hidden=!isAirflow();$('sweep-panel').hidden=isAirflow();
   $('guided-mode').disabled=isAirflow();$('release-breath').textContent=isAirflow()?'Exp start':'Release';
-  document.querySelector('.legend').innerHTML=isAirflow()?'<span><i class="closed"></i>Less aerated (fixed)</span><span><i class="open"></i>Aerated (fixed)</span><span><i class="retained-gas"></i>Gas above relaxed volume</span>':recruitmentLegend;
-  $('map-help').innerHTML=isAirflow()?'<summary>What does airflow mode show?</summary><div class="meaning-grid"><p>Aeration is held fixed while gas moves through linear airway resistances. Dot area follows actual model gas volume; the blue outline marks more than 10% of that region’s end-inspiratory excess still present (a display threshold).</p><p>Intrinsic regional RC is an isolated estimate. Shared central resistance and the chest wall couple the regions, so actual emptying need not follow that local time constant.</p><p>The emptying fraction uses excess gas above the relaxed frozen PEEP reference. It is different from the exhaled/inspired tidal-volume ratio. Equilibration pressures are hypothetical estimates, not measured plateau or clinical auto-PEEP.</p></div>':recruitmentHelp;
-  $('pv-caption').textContent=isAirflow()?'Airway pressure includes resistance. At expiration onset, pressure changes while gas volume remains continuous; the volume then falls as air flows out.':'Watch the cursor move with the breath. A steeper path means more pressure is needed to add volume. Dashed release is instantaneous in this model.';
+  renderLegend();renderMapHelp();refreshEli5();
+  $('pv-caption').textContent=isAirflow()?'When the breath in stops, pressure drops first. The gas volume then falls as air works its way out through the airways.':'The cursor follows the breath. A steeper rise means more pressure for the same added air. This recruitment view calculates an instant gas release; the smooth shrinking is visual.';
 }
 $('mechanics-mode').addEventListener('change',()=>{
   viewBookmark=false;pausePlayback();invalidateComparison(true);lastResults=null;currentFrames=[];$('play-breath').disabled=true;$('breath-frame').disabled=true;
@@ -525,8 +515,8 @@ $('mechanics-mode').addEventListener('change',()=>{
   updateModeViews();setLessonBaseline();
 });
 function updateAirflowMetrics(k,result){
-  const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(metric('Delivered / requested',`${fmt(m.vtDelivered)} / ${fmt(result.targetVT)}`,'mL',false,'delivery'),metric('Peak airway pressure',fmt(m.ppeak,1),'cmH2O',false,'ppeak'),metric('Excess gas emptied',pct(m.fractionEmptied),'',true,'fractionEmptied'),metric('Excess gas retained',fmt(m.retainedVolume,1),'mL',true,'retainedVolume'));
-  const patient=$('patient-'+k);let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('p');help.className='metric-description';help.setAttribute('aria-live','polite');patient.append(help);}help.textContent='';
+  const m=result.metrics,box=$('metrics-'+k);box.replaceChildren(metric('Delivered / requested',`${fmt(m.vtDelivered)} / ${fmt(result.targetVT)}`,'mL',false,'delivery'),metric('Peak airway pressure',fmt(m.ppeak,1),'cmH2O',false,'ppeak'),metric('Extra air released',pct(m.fractionEmptied),'',true,'fractionEmptied'),metric('Extra air left at end',fmt(m.retainedVolume,1),'mL',true,'retainedVolume'));
+  const patient=$('patient-'+k);let help=patient.querySelector('.metric-description');if(!help){help=document.createElement('div');help.className='metric-description';help.setAttribute('aria-live','polite');patient.append(help);}help.textContent='';
   let advanced=patient.querySelector('.advanced-metrics');if(!advanced){advanced=document.createElement('details');advanced.className='advanced-metrics';advanced.innerHTML='<summary>Additional model measures</summary><div class="metrics"></div>';patient.append(advanced);}
   advanced.querySelector('.metrics').replaceChildren(metric('Equivalent RC estimate',fmt(m.tauEquivalent,3),'s',false,'tauEquivalent'),metric('Frozen chord compliance',fmt(m.complianceInput,1),'mL/cmH2O',false,'complianceInput'),metric('Hypothetical end-hold pressure',fmt(m.virtualEndHoldPressure,1),'cmH2O',false,'virtualEndHoldPressure'),metric('Hypothetical excess PEEP',fmt(m.virtualAutoPeep,1),'cmH2O',false,'virtualAutoPeep'));
   let pressure=patient.querySelector('.pressure-summary');if(!pressure){pressure=document.createElement('p');pressure.className='pressure-summary';advanced.append(pressure);}pressure.textContent=`Periodicity residual ${fmt(m.periodicResidual,3)} mL. ${m.converged?'Convergence criterion reached.':'Settling cap reached; this trial is not near periodic.'} Chord-range excursions: ${pct(m.extrapolatedWeight)} of tissue weight; maximum ${pct(result.airflow.chordExcursion.maxRelative)} of that region’s reference breath-volume increment. This linear approximation is not calibrated outside its reference chord.`;
@@ -536,8 +526,8 @@ function renderAirflowTeaching(){
   const pieces=[];for(const key of ['peep','vt','rr'])if(baseline[0].settings[key]!==lastResults[0].settings[key])pieces.push(`${key.toUpperCase()} ${baseline[0].settings[key]} → ${lastResults[0].settings[key]}`);
   if(baseline[0].airflow.params.R0!==lastResults[0].airflow.params.R0)pieces.push(`central resistance ${baseline[0].airflow.params.R0*1000} → ${lastResults[0].airflow.params.R0*1000} cmH2O·s/L`);
   if(!predictionPending)$('prediction-feedback').textContent=pieces.length?pieces.join('; ')+(pieces.length>1?'. Multiple controls changed.':'.'):'No setting change from the airflow baseline.';
-  $('adjustment-explanation').textContent='Aeration is fixed. Resistance and the available expiratory time determine gas movement through this coupled network.';
-  lastResults.forEach((r,i)=>{const article=document.createElement('article'),h=document.createElement('h3'),p=document.createElement('p');h.textContent='Patient '+(i?'B':'A');p.textContent=`Peak airway pressure ${fmt(baseline[i].metrics.ppeak,1)} → ${fmt(r.metrics.ppeak,1)} cmH2O; retained excess gas ${fmt(baseline[i].metrics.retainedVolume,1)} → ${fmt(r.metrics.retainedVolume,1)} mL; fraction of excess gas emptied ${pct(baseline[i].metrics.fractionEmptied)} → ${pct(r.metrics.fractionEmptied)}. Local RC estimates exclude the shared central resistance and chest wall.`;article.append(h,p);$('comparison-explanation').append(article);});
+  $('adjustment-explanation').textContent='The amount of open tissue stays the same here. Air still needs time to leave through the airways. More resistance or less time for breathing out can leave more extra air behind.';
+  lastResults.forEach((r,i)=>{const article=document.createElement('article'),h=document.createElement('h3'),p=document.createElement('p');h.textContent='Patient '+(i?'B':'A');p.textContent=`Peak airway pressure ${fmt(baseline[i].metrics.ppeak,1)} → ${fmt(r.metrics.ppeak,1)} cmH2O; extra air left ${fmt(baseline[i].metrics.retainedVolume,1)} → ${fmt(r.metrics.retainedVolume,1)} mL; share of extra air released ${pct(baseline[i].metrics.fractionEmptied)} → ${pct(r.metrics.fractionEmptied)}. The region’s own time constant leaves out the shared airway and chest wall.`;article.append(h,p);$('comparison-explanation').append(article);});
 }
 function drawFlow(){
   if(!isAirflow()||!lastResults?.[0].trajectory)return;
@@ -545,6 +535,45 @@ function drawFlow(){
   lastResults.forEach((r,i)=>line($('flow-chart'),r.trajectory.frames.map(f=>({x:f.time,y:f.flow/1000})),s,i?colors.b:colors.a));
 }
 for(const [i,el] of [...document.querySelectorAll('.all-pressures')].entries()){const key='ards-all-pressures-'+i;try{el.open=localStorage.getItem(key)==='open';}catch{}el.addEventListener('toggle',()=>{try{localStorage.setItem(key,el.open?'open':'closed');}catch{}});}
+const numbersState=new Map();
+function numberDetails(records,key,title='Work through the numbers'){
+  const details=document.createElement('details'),summary=document.createElement('summary'),content=document.createElement('div');details.className='numbers-explainer';summary.textContent=title;details.append(summary,content);
+  details.open=numbersState.get(key)||false;details.addEventListener('toggle',()=>numbersState.set(key,details.open));
+  content.setAttribute('aria-live','off');
+  if(typeof records==='string'){const p=document.createElement('p');p.textContent=records;content.append(p);}
+  else for(const item of records){const topic=document.createElement('details'),head=document.createElement('summary');topic.className='number-topic';head.textContent=item.title;topic.append(head);for(const name of ['formula','example','meaning','scope']){if(!item[name])continue;const p=document.createElement('p');p.className='number-'+name;if(name==='formula'){const code=document.createElement('code');code.textContent=item[name];p.append(code);}else p.textContent=item[name];topic.append(p);}content.append(topic);}
+  return details;
+}
+function renderMapHelp(){
+  const copy=isAirflow()?AIRFLOW_COPY:RECRUITMENT_COPY,root=$('map-help'),open=root.open;
+  root.replaceChildren();const summary=document.createElement('summary');summary.textContent=copy.title;root.append(summary);
+  const lead=document.createElement('p');lead.className='watch-lead';lead.textContent=copy.watch;root.append(lead);
+  const grid=document.createElement('div');grid.className='meaning-grid';
+  for(const item of copy.sections){const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=item.title+'. ';p.append(strong,item.text);grid.append(p);}root.append(grid,numberDetails(copy.numbers,'map-'+$('mechanics-mode').value));root.open=open;
+}
+function renderMetricHelp(root,key){
+  root.replaceChildren();const p=document.createElement('p');p.textContent=METRIC_HELP[key]||'This value comes from the educational model.';root.append(p);if(METRIC_NUMBERS[key])root.append(numberDetails(METRIC_NUMBERS[key],'metric-'+root.closest('.patient').id+'-'+key));
+}
+function renderLegend(){
+  const legend=document.querySelector('.legend');legend.replaceChildren();
+  const items=isAirflow()?[['closed','Less open (held fixed)'],['open','More open (held fixed)'],['retained-gas','Extra air still here']]:[['closed','Poorly aerated'],['open','Ventilated'],['expansion-ramp','Open part expanding more'],['cyclic','More tissue opened'],['over','High-stretch square']];
+  for(const [cls,label] of items){const span=document.createElement('span'),i=document.createElement('i');i.className=cls;span.append(i,label);legend.append(span);}
+}
+function refreshEli5(){
+  $('eli5-text').textContent=ELI5_COPY[isAirflow()?'airflow':'recruitment'];
+  $('eli5-panel').setAttribute('aria-label',isAirflow()?'ELI5: air moving in and out':'ELI5: opening versus stretching');queueEli5Position();
+}
+function closeEli5(focus=false){$('eli5-panel').hidden=true;$('eli5-toggle').setAttribute('aria-expanded','false');document.querySelector('.breath-panel').classList.remove('eli5-open');if(focus)$('eli5-toggle').focus({preventScroll:true});}
+function positionEli5(){if($('eli5-panel').hidden)return;const panel=$('eli5-panel'),bar=document.querySelector('.breath-panel').getBoundingClientRect();panel.style.maxHeight=Math.max(130,Math.min(360,innerHeight-24))+'px';const height=panel.offsetHeight;panel.style.top=Math.max(8,Math.min(bar.bottom+6,innerHeight-height-8))+'px';}
+let eli5PositionFrame=0;function queueEli5Position(){if($('eli5-panel').hidden||eli5PositionFrame)return;eli5PositionFrame=requestAnimationFrame(()=>{eli5PositionFrame=0;positionEli5();});}
+window.addEventListener('scroll',queueEli5Position,{passive:true});window.addEventListener('resize',queueEli5Position);
+$('eli5-toggle').addEventListener('click',()=>{
+  if(!$('eli5-panel').hidden){closeEli5();return;}
+  refreshEli5();$('eli5-panel').hidden=false;$('eli5-toggle').setAttribute('aria-expanded','true');document.querySelector('.breath-panel').classList.add('eli5-open');
+  positionEli5();
+});
+$('eli5-close').addEventListener('click',()=>closeEli5(true));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('eli5-panel').hidden){event.preventDefault();closeEli5(true);}});
 updateModeViews();
 const params=new URLSearchParams(location.search);
 for(const k of ['peep','vt','rr','pbw'])if(params.has(k)){const el=$(k),v=Number(params.get(k));if(Number.isFinite(v)&&v>=+el.min&&v<=+el.max)el.value=v;}

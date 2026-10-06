@@ -13,12 +13,12 @@ try{
  await page.locator('#mechanics-mode').selectOption('airflow');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory.kind==='frozen-aeration-airflow');
  assert.equal(await page.locator('#resistance-control').isVisible(),true);
  assert.equal(await page.locator('#sweep-panel').isVisible(),false);
- assert.match(await page.locator('.legend').textContent(),/fixed/);assert.doesNotMatch(await page.locator('.legend').textContent(),/Recruitment|overstretch/);
+ assert.match(await page.locator('.legend').textContent(),/fixed/);assert.doesNotMatch(await page.locator('.legend').textContent(),/More tissue opened|High-stretch square/);
  assert.equal(await page.evaluate(()=>window.ardsResults[0].metrics.pplat),null);assert.equal(await page.evaluate(()=>window.ardsResults[0].metrics.over),null);
  const continuity=await page.evaluate(()=>{const t=window.ardsResults[0].trajectory,a=t.frames[t.eiIndex],b=t.frames[t.releaseIndex];return {sameVolume:a.volume===b.volume,pressureChanged:a.pressure!==b.pressure,flowChanged:a.flow!==b.flow,unitSame:a.unitVolume.every((v,i)=>v===b.unitVolume[i]),openingSame:t.frames[0].volume===t.frames[1].volume};});
  assert.deepEqual(continuity,{sameVolume:true,pressureChanged:true,flowChanged:true,unitSame:true,openingSame:true});
  await page.locator('#patient-a .unit-inspection summary').click();await page.locator('#unit-select-a').fill('0');await page.locator('#ei').click();
- assert.match(await page.locator('#unit-a').textContent(),/flow .*intrinsic RC .*excess gas emptied/);
+ assert.match(await page.locator('#unit-a').textContent(),/flow .*own emptying-time estimate \(RC\).*share of extra air released/);
  await page.locator('#release-breath').click();assert.match(await page.locator('#breath-phase').textContent(),/Start expiration/);
  await page.locator('[data-prediction="up"]').click();await page.locator('#apply-adjustment').click();
  await page.waitForFunction(()=>document.getElementById('prediction-feedback').textContent.startsWith('Prediction matched'));
@@ -43,7 +43,7 @@ try{
  // Switching modes invalidates pending flow results and restores the original numerical recruitment path.
  await page.locator('#mechanics-mode').selectOption('recruitment');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory.kind==='quasi-static-steps'&&!document.getElementById('apply-adjustment').disabled);
  assert.deepEqual(await page.evaluate(()=>window.ardsResults.map(r=>r.metrics)),original);assert.equal(await page.locator('#resistance-control').isVisible(),false);
- assert.match(await page.locator('.legend').textContent(),/Recruitment/);
+ assert.match(await page.locator('.legend').textContent(),/More tissue opened/);
  await page.locator('#mechanics-mode').selectOption('airflow');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory.kind==='frozen-aeration-airflow');
  await page.locator('#resistance').evaluate(el=>{el.value='25';el.dispatchEvent(new Event('input'));});await page.locator('#mechanics-mode').selectOption('recruitment');
  await page.waitForFunction(()=>window.ardsResults?.[0].trajectory.kind==='quasi-static-steps');await page.waitForTimeout(300);assert.equal(await page.evaluate(()=>window.ardsResults[0].trajectory.kind),'quasi-static-steps');

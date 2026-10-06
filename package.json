@@ -19,7 +19,8 @@
     "test:airflow-browser": "node benchmarks/airflow-browser.mjs",
     "test:sweep-browser": "node benchmarks/sweep-browser.mjs",
     "test:experiments-browser": "node benchmarks/experiments-browser.mjs",
-    "test:pleural-browser": "node benchmarks/pleural-browser.mjs"
+    "test:pleural-browser": "node benchmarks/pleural-browser.mjs",
+    "test:learner-copy-browser": "node benchmarks/learner-copy-browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
