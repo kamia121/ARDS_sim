@@ -165,8 +165,8 @@ test('recording is reproducible, structured-cloneable and arrays are independent
   const cloned = structuredClone(a);
   assert.deepStrictEqual(cloned, a);
   assert.ok(cloned.frames.every(f => f.unitOpen instanceof Float64Array && f.unitVolume instanceof Float64Array));
-  const buffers = new Set(a.frames.flatMap(f => [f.unitOpen.buffer, f.unitVolume.buffer]));
-  assert.equal(buffers.size, a.frames.length * 2);
+  const buffers = new Set(a.frames.flatMap(f => [f.unitOpen.buffer, f.unitVolume.buffer, f.unitRatio.buffer]));
+  assert.equal(buffers.size, a.frames.length * 3);
   const snapshot = Array.from(a.frames[1].unitOpen), before = Array.from(a.frames[0].unitOpen);
   a.frames[0].unitOpen.fill(-1);
   assert.deepStrictEqual(Array.from(a.frames[1].unitOpen), snapshot);
@@ -175,4 +175,16 @@ test('recording is reproducible, structured-cloneable and arrays are independent
   const f = p.units.map(u => u.f);
   r.trajectory.frames.forEach(fr => fr.unitOpen.fill(0));
   assert.deepStrictEqual(p.units.map(u => u.f), f);
+});
+
+test('display-only unitRatio is finite, typed, and equals EI strainEI exactly', () => {
+  for (const c of CASES) {
+    const { result: r } = run(c, true), t = r.trajectory, ei = t.frames[t.eiIndex];
+    for (const [k, f] of t.frames.entries()) {
+      assert.ok(f.unitRatio instanceof Float64Array, `${c.name} frame ${k}`);
+      assert.equal(f.unitRatio.length, r.units.length);
+      assert.ok(f.unitRatio.every(x => Number.isFinite(x) && x >= 0), `${c.name} frame ${k} finite`);
+    }
+    r.units.forEach((u, i) => assert.equal(ei.unitRatio[i], u.strainEI, `${c.name} unit ${i}`));
+  }
 });

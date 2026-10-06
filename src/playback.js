@@ -50,6 +50,17 @@ export function sampleTrajectory(trajectory,time){
   }
   return {frame:f[hi],index:hi,interpolated:false};
 }
+export function transitionFrame(trajectory,w){
+  validate(trajectory);
+  if(trajectory.kind!=='quasi-static-steps')throw new TypeError('playback: transitionFrame requires a quasi-static-steps trajectory');
+  if(typeof w!=='number'||!Number.isFinite(w)||w<0||w>1)throw new RangeError('playback: transition weight must be a finite number from 0 to 1');
+  const ei=trajectory.frames[trajectory.eiIndex],release=trajectory.frames[trajectory.releaseIndex];
+  if(w===0)return ei;
+  if(w===1)return release;
+  const out=blend(ei,release,w,'transition');
+  out.time=ei.time;
+  return out;
+}
 export function frameLabel(frame,index,trajectory){
   validate(trajectory);
   const f=trajectory.frames;

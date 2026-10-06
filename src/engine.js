@@ -144,14 +144,14 @@ export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1, recor
   if (recordTrajectory) for (const u of patient.units) trajDep += u.weight * u.dep;
   let frames = null;
   const addFrame = (time, phase, pressure, volume, z, ceilingActive) => {
-    const n = patient.units.length, unitOpen = new Float64Array(n), unitVolume = new Float64Array(n);
+    const n = patient.units.length, unitOpen = new Float64Array(n), unitVolume = new Float64Array(n), unitRatio = new Float64Array(n);
     let open = 0;
     for (let i = 0; i < n; i++) {
-      const u = patient.units[i];
-      unitOpen[i] = u.f; unitVolume[i] = u.f * regionalVolume(u, z - patient.pleuralGradient * u.dep); open += u.weight * u.f;
+      const u = patient.units[i], tp = z - patient.pleuralGradient * u.dep, fullyOpen = regionalVolume(u, tp), reference = regionalVolume(u, MODEL_INFO.referenceTranspulmonaryPressure);
+      unitOpen[i] = u.f; unitVolume[i] = u.f * fullyOpen; unitRatio[i] = reference > 0 ? fullyOpen / reference : 0; open += u.weight * u.f;
     }
     const meanPleural = patient.baselinePleural + patient.pleuralGradient * trajDep + patient.chestWallElastance * (volume - patient.chestWallReferenceVolume);
-    frames.push({ time, phase, pressure, volume, meanPleural, open, ceilingActive, unitOpen, unitVolume });
+    frames.push({ time, phase, pressure, volume, meanPleural, open, ceilingActive, unitOpen, unitVolume, unitRatio });
   };
   let ee, ei, eeState, eiState, limited = false, pv = [], maxPressure = s.peep, finalEffectiveTarget = 0, finalMode = 'volume';
   let zGuess = s.peep - patient.baselinePleural;
