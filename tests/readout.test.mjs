@@ -22,3 +22,5 @@ test('quasi-static readout PL equals tissue-weighted regional transpulmonary pre
     assert.ok(Math.abs(frameReadout(f,r.trajectory.kind,0).find(x=>x.key==='pl').value-mean)<1e-12);
   }
 });
+
+test('simulated local surrogate is separate from mean pressure and remains an airway difference during flow',()=>{const p={pesModel:8,plEs:12,pplVentral:5,pplDorsal:10};const a=frameReadout(frame,'quasi-static-steps',2000,p),b=frameReadout(frame,'frozen-aeration-airflow',2000,p);assert.equal(a.find(r=>r.key==='pes').value,8);assert.equal(a.find(r=>r.key==='plEs').value,12);assert.equal(a.find(r=>r.key==='pl').value,13);assert.match(b.find(r=>r.key==='plEs').note,/not alveolar/);assert.match(a.find(r=>r.key==='pes').note,/not a balloon measurement/);});

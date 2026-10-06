@@ -1,3 +1,5 @@
 # Project instructions
 
 Preserve this as an explicitly uncalibrated educational model. Do not add patient-treatment recommendations or invented validation claims. Keep equations, parameters, raw benchmark results and UI labels consistent. Treat regional map locations as schematic. Changes to physiology require meaningful verification, an updated model specification, and recorded numerical sensitivity. Run `npm test` and `npm run build`; run browser QA after UI changes. Keep the app portable and avoid production dependencies without a clear need. Never commit credentials or patient data. Review independent Claude findings critically and record accepted changes.
+
+For substantive physiology, clinical teaching/interpretation, and learner-interaction changes, consult the actual Claude Opus 5.5 model with High reasoning and discuss the concrete implementation plan before coding. Assess its recommendations critically; do not substitute another model while calling it Opus. Routine minor fixes do not require a separate consultation.

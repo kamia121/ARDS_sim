@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sampleTrajectory,frameLabel,transitionFrame} from '../src/playback.js';
+import {sampleTrajectory,frameLabel,transitionFrame,loopTransitionFrame,displaySegment,displayElapsed} from '../src/playback.js';
 const mk=(time,phase,volume,pressure,u,ceil=false)=>({time,phase,pressure,volume,meanPleural:volume/10,open:volume,ceilingActive:ceil,unitOpen:Float64Array.from(u),unitVolume:Float64Array.from(u.map(x=>x*2))});
 const tr=()=>({kind:'quasi-static-steps',cycle:3,ti:1,eiIndex:2,releaseIndex:3,frames:[
   mk(0,'start',0,5,[0,0]),mk(.5,'inspiration',200,15,[1,0]),mk(1,'inspiration',400,25,[1,1],true),
@@ -89,4 +89,102 @@ test('transitionFrame rejects invalid weights, airflow and malformed trajectorie
   assert.throws(()=>transitionFrame(a,.5),/quasi-static/);
   assert.throws(()=>transitionFrame(null,.5),/required/);
   assert.throws(()=>transitionFrame({...tr(),releaseIndex:2},.5),/eiIndex/);
+});
+
+const air=()=>{const t=tr();t.kind='frozen-aeration-airflow';const shared=Float64Array.from([1,1]);t.frames.forEach(f=>{f.unitOpen=shared;});
+  t.frames[0]={...t.frames[0],pressure:0,volume:0};t.frames[1]={...t.frames[0],phase:'inspiration',pressure:15};return t;};
+test('loopTransitionFrame returns last/start by reference at endpoints',()=>{
+  const t=tr();assert.equal(loopTransitionFrame(t,0),t.frames[5]);assert.equal(loopTransitionFrame(t,1),t.frames[0]);
+});
+test('loopTransitionFrame blends last to first, pins time, never mutates',()=>{
+  const t=tr(),f=loopTransitionFrame(t,.25);
+  assert.equal(f.phase,'loop-transition');assert.equal(f.time,3);
+  assert.equal(f.volume,15);assert.equal(f.pressure,5);assert.ok(f.unitOpen instanceof Float64Array);
+  assert.deepEqual([...f.unitOpen],[0,0]);assert.notEqual(f.unitOpen,t.frames[5].unitOpen);
+  t.frames[5].unitOpen=Float64Array.from([1,0]);t.frames[5].volume=40;
+  const g=loopTransitionFrame(t,.5);assert.equal(g.volume,20);assert.deepEqual([...g.unitOpen],[.5,0]);assert.equal(g.time,3);
+  const s2=dump(t);loopTransitionFrame(t,.7);assert.equal(dump(t),s2);
+});
+test('loopTransitionFrame works on airflow with shared frozen unitOpen and leaves it intact',()=>{
+  const t=air(),shared=t.frames[0].unitOpen,snap=dump(t);
+  const f=loopTransitionFrame(t,.5);
+  assert.notEqual(f.unitOpen,shared);assert.deepEqual([...f.unitOpen],[1,1]);assert.equal(f.time,3);
+  assert.equal(f.volume,10);
+  assert.equal(dump(t),snap);assert.deepEqual([...shared],[1,1]);
+});
+test('loopTransitionFrame validates',()=>{
+  for(const w of [-1,2,NaN,Infinity,'0',null,undefined])assert.throws(()=>loopTransitionFrame(tr(),w),/weight/);
+  assert.throws(()=>loopTransitionFrame(null,.5),/required/);
+});
+test('displaySegment boundaries with defaults (quasi-static)',()=>{
+  const t=tr(),S=e=>displaySegment(t,e);
+  const P=3+.45+.5+.35;
+  assert.deepEqual(S(0),{segment:'inspiration',replayTime:0,weight:0,period:P});
+  assert.equal(S(.5).segment,'inspiration');assert.equal(S(.5).replayTime,.5);
+  assert.deepEqual([S(1).segment,S(1).replayTime,S(1).weight],['hold',1,0]);
+  assert.equal(S(1.449).segment,'hold');
+  assert.deepEqual([S(1.45).segment,S(1.45).replayTime,S(1.45).weight],['ei-transition',1,0]);
+  assert.equal(S(1.7).weight,.5);
+  assert.deepEqual([S(1.95).segment,S(1.95).replayTime,S(1.95).weight],['expiration',1,0]);
+  assert.equal(S(2.95).replayTime,2);
+  assert.deepEqual([S(3.95).segment,S(3.95).replayTime,S(3.95).weight],['loop-transition',3,0]);
+  assert.ok(Math.abs(S(4.125).weight-.5)<1e-12);
+  assert.equal(S(P).segment,'done');assert.equal(S(P+100).segment,'done');assert.equal(S(P).weight,1);
+});
+test('displaySegment zero-length boundaries choose coherent half-open segments',()=>{
+  const t=tr();
+  assert.equal(displaySegment(t,1,{hold:0}).segment,'ei-transition');
+  assert.equal(displaySegment(t,1,{hold:0,eiTransition:0}).segment,'expiration');
+  assert.equal(displaySegment(t,1,{hold:0,eiTransition:0}).replayTime,1);
+  assert.equal(displaySegment(t,0,{hold:0,eiTransition:0,loopTransition:0}).segment,'inspiration');
+  assert.equal(displaySegment(t,3,{hold:0,eiTransition:0,loopTransition:0}).segment,'done');
+  assert.equal(displaySegment(t,3,{hold:0,eiTransition:0,loopTransition:.2}).segment,'loop-transition');
+});
+test('displaySegment airflow has no EI blend; onset and release are not blended with first opening',()=>{
+  const t=air(),o={hold:.4};
+  assert.equal(displaySegment(t,0,o).period,3+.4+.35);
+  assert.equal(displaySegment(t,1.2,o).segment,'hold');
+  const x=displaySegment(t,1.4,o);assert.deepEqual([x.segment,x.replayTime,x.weight],['expiration',1,0]);
+  assert.equal(displaySegment(t,1.4+.5,{...o,eiTransition:9}).replayTime,1.5);
+  assert.equal(displaySegment(t,1.4,{...o,eiTransition:9}).segment,'expiration');
+  assert.equal(displayElapsed(t,1,3,o),1.4);
+  const first=sampleTrajectory(t,1e-9);assert.ok(first.frame.pressure>14.99);
+  assert.equal(displaySegment(t,1e-9,o).segment,'inspiration');
+});
+test('displaySegment loop=false has no extra end pause',()=>{
+  const t=tr(),o={loop:false,loopTransition:5};
+  const P=3+.45+.5;
+  assert.equal(displaySegment(t,0,o).period,P);
+  assert.equal(displaySegment(t,P-1e-9,o).segment,'expiration');
+  assert.equal(displaySegment(t,P,o).segment,'done');
+});
+test('displaySegment validates elapsed and options',()=>{
+  const t=tr();
+  for(const e of [-1,NaN,Infinity,'1',null,undefined])assert.throws(()=>displaySegment(t,e),/elapsed/);
+  for(const k of ['hold','eiTransition','loopTransition'])for(const v of [-1,NaN,Infinity,'1',null])assert.throws(()=>displaySegment(t,0,{[k]:v}),new RegExp(k));
+  assert.throws(()=>displaySegment(t,0,{loop:'yes'}),/loop/);
+  assert.throws(()=>displaySegment(t,0,null),/options/);
+  assert.throws(()=>displaySegment(null,0),/required/);
+  assert.throws(()=>displaySegment({...tr(),releaseIndex:2},0),/eiIndex/);
+});
+test('displayElapsed maps model time and frame to wall clock',()=>{
+  const t=tr(),o={hold:.45,eiTransition:.5};
+  assert.equal(displayElapsed(t,.5,1,o),.5);
+  assert.equal(displayElapsed(t,1,2,o),1);
+  assert.equal(displayElapsed(t,1,3,o),1.95);
+  assert.equal(displayElapsed(t,2,4,o),2.95);
+  assert.equal(displayElapsed(t,3,5,o),3.95);
+  assert.equal(displayElapsed(t,0,0,o),0);
+  assert.equal(displayElapsed(t,99,5,o),3.95);
+  assert.equal(displaySegment(t,displayElapsed(t,3,5,o),o).segment,'loop-transition');
+  assert.equal(displaySegment(t,displayElapsed(t,1,3,o),o).segment,'expiration');
+  assert.equal(displaySegment(t,displayElapsed(t,1,2,o),o).segment,'hold');
+  for(const time of [NaN,Infinity,'1'])assert.throws(()=>displayElapsed(t,time,0),/time/);
+  for(const i of [-1,6,1.5,NaN,undefined])assert.throws(()=>displayElapsed(t,1,i),/index/);
+  assert.throws(()=>displayElapsed(t,1,2,{hold:-1}),/hold/);
+});
+test('raw trajectory data and its start/end differences are untouched by display helpers',()=>{
+  const t=tr(),snap=dump(t);
+  for(const e of [0,.7,1,1.45,1.7,2,3.9,4.1,9]){const s=displaySegment(t,e);if(s.segment==='ei-transition')transitionFrame(t,s.weight);if(s.segment==='loop-transition')loopTransitionFrame(t,s.weight);}
+  assert.equal(dump(t),snap);assert.equal(t.frames[5].volume-t.frames[0].volume,20);
 });

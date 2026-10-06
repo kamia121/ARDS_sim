@@ -23,7 +23,7 @@ export function createSession(){
     }
     lastId=id;
     const experiment=normalizeExperiment(settings?.experiment);
-    const results=patients.map(p=>({...simulateExperiment(p,settings,{breaths:10,dt:0.1,recordTrajectory:data.recordTrajectory===true}),phenotype:p.kind,seed:p.seed}));
+    const results=patients.map(p=>({...simulateExperiment(p,settings,{breaths:10,dt:0.1,recordTrajectory:data.recordTrajectory===true,recordPleuralField:data.recordPleuralField===true&&data.recordTrajectory===true}),phenotype:p.kind,seed:p.seed}));
     candidate={token:id,key,patients,experiment};
     return {id,type:'compare',config:structuredClone(config),results,modelInfo:MODEL_INFO,stateToken:id};
   }
@@ -36,7 +36,7 @@ export function createSession(){
     if(!isDefaultExperiment(settings?.experiment)||!isDefaultExperiment(accepted.experiment))throw new Error('Airflow trials are not available for a nondefault experiment (requested or in the accepted state)');
     lastId=id;candidate=null;
     const airflowSettings=withoutExperiment(settings);
-    const results=accepted.patients.map(p=>({...simulateAirflow(structuredClone(p),airflowSettings,{params,recordTrajectory:true}),phenotype:p.kind,seed:p.seed}));
+    const results=accepted.patients.map(p=>({...simulateAirflow(structuredClone(p),airflowSettings,{params,recordTrajectory:true,recordPleuralField:data.recordPleuralField===true}),phenotype:p.kind,seed:p.seed}));
     return {id,type:'airflow',config:structuredClone(config),results,modelInfo:AIRFLOW_INFO,baseStateToken:accepted.token};
   }
   function acceptState({id}){

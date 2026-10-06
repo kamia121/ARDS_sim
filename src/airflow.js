@@ -177,18 +177,20 @@ export function advanceNetwork(network, x, h, drive) {
 
 function checkOptions(options) {
   if (options == null || typeof options !== 'object') throw new TypeError('options must be an object');
-  const { params = {}, dt = 0.1, substeps = 4, minBreaths = 10, maxBreaths = 60, periodicTolerance = 0.5, recordTrajectory = true } = options;
+  const { params = {}, dt = 0.1, substeps = 4, minBreaths = 10, maxBreaths = 60, periodicTolerance = 0.5, recordTrajectory = true, recordPleuralField = false } = options;
   if (typeof recordTrajectory !== 'boolean') throw new TypeError('recordTrajectory must be a boolean');
+  if (typeof recordPleuralField !== 'boolean') throw new TypeError('recordPleuralField must be a boolean');
+  if (recordPleuralField && !recordTrajectory) throw new RangeError('recordPleuralField requires recordTrajectory');
   if (typeof dt !== 'number' || !(dt > 0 && dt <= 1)) throw new RangeError('dt must be in (0, 1] s');
   if (!Number.isInteger(substeps) || substeps < 1 || substeps > 1000) throw new RangeError('substeps must be an integer 1..1000');
   if (!Number.isInteger(minBreaths) || minBreaths < 1 || !Number.isInteger(maxBreaths) || maxBreaths < minBreaths || maxBreaths > 1000) throw new RangeError('breaths must satisfy 1 <= minBreaths <= maxBreaths <= 1000');
   if (typeof periodicTolerance !== 'number' || !(periodicTolerance > 0) || !Number.isFinite(periodicTolerance)) throw new RangeError('periodicTolerance must be positive and finite');
-  return { params, dt, substeps, minBreaths, maxBreaths, periodicTolerance, recordTrajectory };
+  return { params, dt, substeps, minBreaths, maxBreaths, periodicTolerance, recordTrajectory, recordPleuralField };
 }
 
 /** Periodic-steady-state frozen-aeration airflow simulation. Does not mutate the patient. */
 export function simulateAirflow(patient, settings = {}, options = {}) {
-  const { params, dt, substeps, minBreaths, maxBreaths, periodicTolerance, recordTrajectory } = checkOptions(options);
+  const { params, dt, substeps, minBreaths, maxBreaths, periodicTolerance, recordTrajectory, recordPleuralField } = checkOptions(options);
   const net = buildFrozenNetwork(patient, settings, params), s = net.settings, { n, activeIndices: act } = net;
   const { peep, pressureLimit: ceiling } = s, targetVT = net.targetVT;
   const cycle = 60 / s.rr, ti = cycle / 3, te = cycle - ti, Qt = targetVT / ti;
@@ -329,5 +331,6 @@ export function simulateAirflow(patient, settings = {}, options = {}) {
     }
   };
   if (recordTrajectory) result.trajectory = { kind: 'frozen-aeration-airflow', cycle, ti, eiIndex: ni + 1, releaseIndex: ni + 2, frozenOpen: Float64Array.from(net.frozenOpen), frames: last.frames };
+  if (recordTrajectory && recordPleuralField) result.trajectory.pleural = { gradient: patient.pleuralGradient, depMean: net.depMean };
   return result;
 }

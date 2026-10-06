@@ -75,3 +75,8 @@ main{max-width:1440px}.intro{padding:18px 0 12px}.intro h1{margin-bottom:6px;fon
 .map-live-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;position:sticky;top:calc(var(--breath-panel-height,160px) + 8px);z-index:9;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px;margin:5px 0}.map-live-strip small{display:block;font-size:10px;color:var(--muted)}.map-live-strip strong{display:block;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}@media(max-width:800px){.map-live-strip{top:calc(var(--control-dock-height,205px) + var(--breath-panel-height,160px) + 5px);z-index:18}}
 
 .map-live-strip::before{content:"Model pressures: cmH2O · volume: L";grid-column:1 / -1;font-size:9px;color:var(--muted)}
+
+/* Keep the lungs ahead of numeric inspection. */
+.map-live-strip{position:static;z-index:auto;top:auto}.pressure-field{display:block;width:100%;height:118px;margin:4px 0 6px}.pressure-field text{font-size:10px;fill:var(--muted)}.all-pressures{margin-top:10px;border-top:1px solid var(--border);padding-top:8px;font-size:12px}.all-pressures summary{cursor:pointer;min-height:32px}.stretch-scope{font-size:10px;color:var(--muted);margin:4px 0 0}.all-pressures .pressure-dashboard{margin-top:4px}@media(max-width:560px){.pressure-field{height:110px}.stretch-scope{font-size:9px}}
+
+.stale-result{opacity:.5}.stretch-scope[hidden]{display:none}

@@ -15,7 +15,7 @@ export const METRIC_HELP = {
   crs:'Delivered tidal volume divided by driving pressure. Higher compliance means more volume per unit of elastic pressure in this model; it does not prove a safer setting.',
   openEE:'Tissue-weighted aerated fraction at expiration. An increase means more of the assumed tissue remains open. It does not predict oxygenation or clinical outcome.',
   cyclic:'Positive change in open fraction from expiration to inspiration. It can indicate within-breath recruitment, but this snapshot comparison does not independently measure expiratory closure or injury.',
-  over:'Aerated tissue above an assumed fully open volume ratio of 1.65 relative to that unit at transpulmonary pressure 5 cmH2O. This is a distension proxy, not a validated injury cutoff.',
+  over:'Aerated tissue above the assumed fully open volume-ratio cutoff of 1.65, relative to that region at 5 cmH2O transpulmonary pressure. Red highlights possible excessive stretch, a potential injury mechanism. This does not predict or detect tissue damage, and no red does not establish safety.',
   closedPerfusion:'Closed tissue weighted by a fixed anatomical dorsal weighting proxy. In a prone experiment the weighting stays anatomical and is not always gravitationally dependent. This is a proxy only; it does not predict shunt or gas exchange.'
 };
 export const VT_DISPLAY_TOLERANCE_ML=1;

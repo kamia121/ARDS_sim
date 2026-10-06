@@ -137,10 +137,12 @@ function validateSettings(settings) {
 
 export const MAX_TRAJECTORY_VALUES = 250000;
 
-export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1, recordTrajectory = false } = {}) {
+export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1, recordTrajectory = false, recordPleuralField = false } = {}) {
   const s = validateSettings(settings);
   if (!Number.isInteger(breaths) || breaths < 1 || breaths > 1000 || !(dt > 0 && dt <= 1)) throw new RangeError('breaths must be 1..1000 and dt 0..1 s');
   if (typeof recordTrajectory !== 'boolean') throw new TypeError('recordTrajectory must be a boolean');
+  if (typeof recordPleuralField !== 'boolean') throw new TypeError('recordPleuralField must be a boolean');
+  if (recordPleuralField && !recordTrajectory) throw new RangeError('recordPleuralField requires recordTrajectory');
   const cycle = 60 / s.rr, ti = cycle / 3, te = cycle - ti, targetVT = s.vt * patient.pbw;
   if (recordTrajectory) {
     const frameCount = Math.ceil(ti / dt) + Math.ceil(te / dt) + 2;
@@ -215,6 +217,7 @@ export function simulate(patient, settings = {}, { breaths = 10, dt = 0.1, recor
   const meanPleuralEI = patient.baselinePleural + patient.pleuralGradient * depMean + patient.chestWallElastance * (ei.volume - patient.chestWallReferenceVolume);
   const result = { metrics: { eelv: ee.volume, vtDelivered, pplat: ei.pressure, dp, crs: dp > 1e-8 ? vtDelivered / dp : null, openEE, openEI, cyclic, over, closedPerfusion: closedPerfusion / perfusionTotal, meanPleuralEE, meanPleuralEI, transpulmonaryEI: ei.pressure - meanPleuralEI, volumeError: vtDelivered - targetVT, volumeResidual: ei.volume - finalEffectiveTarget, limited }, units, pv, settings: s, targetVT, maxPressure, simulatedSeconds: breaths * cycle, totalElapsed: patient.elapsed, breaths, dt, labels: { closedPerfusion: 'Perfusion-weighted closed fraction proxy', over: `Aerated tissue fraction above assumed Vopen(EI)/Vopen(TP5) ratio ${MODEL_INFO.highStrainCutoff}`, eelv: 'Start-of-final-breath end-expiratory gas volume', state: 'Recruitment state after final expiration' } };
   if (frames) result.trajectory = { kind: 'quasi-static-steps', cycle, ti, eiIndex: Math.ceil(ti / dt), releaseIndex: Math.ceil(ti / dt) + 1, frames };
+  if (frames && recordPleuralField) result.trajectory.pleural = { gradient: patient.pleuralGradient, depMean: trajDep };
   return result;
 }
 

@@ -9,7 +9,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:5173');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory);
  assert.equal(await page.getByText('Why it matters',{exact:false}).count(),0);
- for(const k of ['a','b']){const box=await page.locator('#pressures-'+k).boundingBox(),map=await page.locator('#map-'+k).boundingBox();assert.ok(box.y<map.y);assert.match(await page.locator('#pressures-'+k).textContent(),/Esophageal · Pes—not modeled/);}
+ for(const k of ['a','b']){assert.equal(await page.locator('#map-'+k).evaluate(el=>Boolean(el.compareDocumentPosition(document.getElementById('pressures-'+el.id.at(-1)))&Node.DOCUMENT_POSITION_FOLLOWING)),true);assert.match(await page.locator('#pressures-'+k).textContent(),/Esophageal surrogate · Pes/);}
  await page.locator('#sweep').click();await page.waitForFunction(()=>window.ardsSweepIndex>=1&&window.ardsSweep);
  const baseline=await page.evaluate(()=>({renders:window.ardsRenderCounter,peep:document.getElementById('peep').value,results:JSON.stringify(window.ardsResults),sweep:JSON.stringify(window.ardsSweep)}));
  await page.locator('#play-sweep').click();const paused=await page.evaluate(()=>window.ardsSweepIndex);await page.waitForTimeout(700);assert.equal(await page.evaluate(()=>window.ardsSweepIndex),paused);
