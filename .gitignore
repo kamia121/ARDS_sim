@@ -13,4 +13,5 @@ benchmarks/*.jpg
 benchmarks/*.jpeg
 benchmarks/*.webp
 benchmarks/*.json
+benchmarks/*.jsonl
 benchmarks/*.txt

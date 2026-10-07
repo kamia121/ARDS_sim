@@ -6,9 +6,10 @@ const session=createSession();
 self.onmessage=async({data})=>{
   const {id,type,config,settings}=data;
   try{
-    if(type==='compare'||type==='accept-state'||type==='airflow'){
-      const result=session.handle(data),buffers=new Set();
-      for(const r of result.results||[]){if(r.trajectory?.frozenOpen)buffers.add(r.trajectory.frozenOpen.buffer);for(const frame of r.trajectory?.frames||[])for(const key of ['unitOpen','unitVolume','unitRatio','unitFlow'])if(frame[key])buffers.add(frame[key].buffer);}
+    if(type==='compare'||type==='accept-state'||type==='airflow'||type==='unified'){
+      const handled=session.handle(data),result=type==='unified'?structuredClone(handled):handled,buffers=new Set();
+      // Unified frames may share arrays with the retained candidate: transfer a separate clone.
+      for(const r of result.results||[]){if(r.trajectory?.frozenOpen)buffers.add(r.trajectory.frozenOpen.buffer);for(const frame of r.trajectory?.frames||[])for(const key of ['unitOpen','unitVolume','unitRatio','unitFlow','unitAlveolar'])if(frame[key])buffers.add(frame[key].buffer);}
       self.postMessage(result,[...buffers]);
     }else if(type==='sweep'){
       const results=config.map(c=>sweepExperiment(createPatient(c.kind,c.seed,512,c.pbw),settings));

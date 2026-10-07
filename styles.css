@@ -95,3 +95,13 @@ main{max-width:1440px}.intro{padding:18px 0 12px}.intro h1{margin-bottom:6px;fon
 .eli5-panel p{font-size:14px;line-height:1.55;margin:8px 0}
 .eli5-panel small{font-size:11px;color:var(--muted)}#eli5-toggle{font-size:12px;padding:5px 9px}
 @media(max-width:560px){#eli5-toggle{font-size:11px;padding:4px 7px}.eli5-panel{padding:10px}.eli5-panel p{font-size:13px}.number-topic{padding:8px}}
+
+.unified-controls .control-note{margin:6px 0}.unified-controls .field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 10px}.unified-controls .field-grid label{margin-top:2px;font-size:11px;color:var(--muted)}.unified-controls input[type=number]{width:100%;min-height:34px;font-size:13px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--panel);color:var(--ink)}.unified-controls input:disabled{opacity:.5}.unified-controls .check{display:flex;align-items:center;gap:6px;font-size:12px}.unified-controls .check input{width:auto;min-height:0}
+.legend .pressure-ring{background:transparent;border:2px solid #798ec5}
+.unified-flags{font-size:11px;line-height:1.4;color:var(--muted);margin:4px 0 0}
+.flowchart{padding-left:22px;font-size:14px;line-height:1.6;color:var(--muted)}.flowchart li{margin:4px 0}#unified-assumptions{font-size:14px;margin:12px 0}#unified-assumptions summary{cursor:pointer}
+@media(max-width:800px){.unified-controls[open]{max-height:160px;overflow:auto}.unified-controls .field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.map-live-strip.unified-strip{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:800px){body:has(.unified-controls[open]:not([hidden])) .breath-panel :is(.legend,.stretch-scope,#replay-note){display:none}}
+@media(max-width:800px){.unified-controls[open],body:has(#unified-advanced:not([hidden])) #pressure-experiments[open]{max-height:120px}.unified-controls[open]>summary{position:sticky;top:0;background:var(--panel);z-index:1}body:has(#unified-advanced:not([hidden])):has(#pressure-experiments[open]) .breath-panel :is(.legend,.stretch-scope,#replay-note){display:none}}

@@ -20,7 +20,10 @@
     "test:sweep-browser": "node benchmarks/sweep-browser.mjs",
     "test:experiments-browser": "node benchmarks/experiments-browser.mjs",
     "test:pleural-browser": "node benchmarks/pleural-browser.mjs",
-    "test:learner-copy-browser": "node benchmarks/learner-copy-browser.mjs"
+    "test:learner-copy-browser": "node benchmarks/learner-copy-browser.mjs",
+    "test:unified-browser": "node benchmarks/unified-browser.mjs",
+    "test:unified-learner-browser": "node benchmarks/unified-learner-browser.mjs",
+    "bench:unified-sensitivity": "node benchmarks/unified-sensitivity.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

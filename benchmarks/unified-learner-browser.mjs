@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {chromium} from 'playwright';
+const server=spawn(process.execPath,['scripts/serve.mjs'],{stdio:['ignore','pipe','inherit']});await once(server.stdout,'data');
+const browser=await chromium.launch({headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:5173/?mode=unified');await page.waitForFunction(()=>window.ardsResults?.[0].trajectory?.kind==='unified-nonlinear-flow');
+ const counter=()=>page.evaluate(()=>window.ardsRenderCounter);
+ const next=v=>page.waitForFunction(x=>window.ardsRenderCounter>x,v,{timeout:30000});
+ const input=async(id,value)=>{await page.locator('#'+id).evaluate((e,v)=>{e.value=v;e.dispatchEvent(new Event(e.type==='range'?'input':'change',{bubbles:true}));},String(value));};
+ for(const lesson of ['unified-peep','unified-volume','unified-small','unified-time']){
+  let n=await counter();await page.locator('#lesson').selectOption(lesson);await next(n);
+  assert.equal(await page.locator('#apply-adjustment').isEnabled(),true);
+  await page.locator('[data-prediction="up"]').click();n=await counter();await page.locator('#apply-adjustment').click();await next(n);
+  assert.match(await page.locator('#prediction-feedback').textContent(),/Prediction matched|Different from your prediction/);
+  assert.ok(await page.evaluate(()=>window.ardsResults.every(r=>Number.isFinite(r.metrics.dynamicResidual))));
+  await page.locator('#ee').click();
+ }
+ await page.locator('#scenario-details').evaluate(e=>e.open=true);await page.locator('#guided-mode').uncheck();
+ let n=await counter();await input('peep',10);await next(n);assert.ok(await page.evaluate(()=>window.ardsResults.every(r=>r.unified.initialState.source==='carried')));
+ n=await counter();await input('peep',12);await next(n);assert.ok(await page.evaluate(()=>window.ardsResults.every(r=>r.unified.initialState.source==='carried')));
+ await page.locator('#end-expiration').click();await page.locator('#map-a').scrollIntoViewIfNeeded();const scroll=await page.evaluate(()=>scrollY);
+ n=await counter();await input('vt',1);await next(n);assert.ok(Math.abs(await page.evaluate(()=>scrollY)-scroll)<3);
+ assert.equal(await page.evaluate(()=>window.ardsFrameIndex),await page.evaluate(()=>window.ardsResults[0].trajectory.frames.length-1));
+ await page.locator('#unified-advanced').evaluate(e=>e.open=true);n=await counter();await input('u-rp',6);await next(n);
+ assert.ok(await page.evaluate(()=>window.ardsResults.every(r=>r.unified.initialState.source==='relaxed')));
+ assert.equal(await page.locator('#apply-adjustment').isDisabled(),true);
+ const bThresholds=await page.evaluate(()=>window.ardsResults[1].units.map(u=>u.popen));
+ await page.locator('#unified-custom').evaluate(e=>e.open=true);assert.equal(await page.locator('#unified-advanced').evaluate(e=>e.open),false);
+ n=await counter();await page.locator('#u-custom').check();await next(n);
+ n=await counter();await page.locator('#u-target').selectOption('a');await next(n);
+ n=await counter();await page.locator('#u-diff').fill('0.9');await page.locator('#u-diff').press('Tab');await next(n);
+ n=await counter();await input('u-init-open',.2);await next(n);
+ assert.deepEqual(await page.evaluate(()=>window.ardsResults[1].units.map(u=>u.popen)),bThresholds);
+ assert.ok(await page.evaluate(()=>window.ardsResults[0].units.filter(u=>u.popen>=38).length>400));
+ await page.evaluate(()=>{navigator.clipboard.writeText=async s=>{window.qaShared=s;};});await page.locator('#share').click();
+ const url=await page.evaluate(()=>window.qaShared);assert.equal(new URL(url).searchParams.get('u-target'),'a');
+ const before=await page.evaluate(()=>window.ardsResults.map(r=>r.metrics));
+ await page.goto(url);await page.waitForFunction(()=>window.ardsResults?.[0].trajectory?.kind==='unified-nonlinear-flow');
+ assert.equal(await page.locator('#u-target').inputValue(),'a');assert.equal(await page.locator('#u-custom').isChecked(),true);
+ const after=await page.evaluate(()=>window.ardsResults.map(r=>r.metrics));assert.deepEqual(after,before);
+ await page.setViewportSize({width:390,height:900});await page.locator('#unified-custom').evaluate(e=>e.open=true);await page.waitForTimeout(200);await page.locator('#map-a').scrollIntoViewIfNeeded();await page.waitForTimeout(100);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ const r=await page.locator('#peep').boundingBox();assert.ok(r.y>=0&&r.y+r.height<=900);const map=await page.locator('#map-a').boundingBox();assert.ok(map.y>=0&&map.y+map.height<=901,'advanced controls keep the full map visible: '+JSON.stringify(map));
+ await page.screenshot({path:'benchmarks/preview-unified-custom-mobile.png'});
+ await page.locator('#unified-custom').evaluate(e=>e.open=false);await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await page.locator('#eli5-toggle').isEnabled(),true);
+ assert.deepEqual(errors,[]);console.log('All four unified predictions, retained gas state, phase/scroll preservation, independent customization and scenario-link round trip passed.');
+}finally{await browser.close();server.kill();}
